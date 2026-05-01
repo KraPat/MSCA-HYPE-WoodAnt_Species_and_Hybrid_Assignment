@@ -2,17 +2,21 @@
 ##As a first step, we will map the files to a reference hybrid genome, and then sort and index them.
 ## In the second step, we will compute size distributions. In a third step, we will filter (exclude) duplicates
 ## See, the script below.
-## We need a new folder "05.BAM" and within this folder, a folder called "logs", a folder called "stats", and a folder called "nodupl".
-## We will use the same sample file as initially created
+## We need a new folder "05.BAM" and within this folder, a folder called "logs", a folder called "stats", and a folder called "nodupl". Further, within the folder "nodupl", we also need to create a folder called "stats".
+## you can create them with, e.g.:
+### mkdir 05.BAM
+### mkdir 05.BAM/logs ...etc.
+## We will use the same sample file "name.list" as created before for the trimming
+## "vim 5_mapping.sh"
 
 #!/bin/bash -l
 #SBATCH -J map
-#SBATCH -o /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM/logs/map_%j.out
-#SBATCH -e /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM/logs/map_%j.err
+#SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/map_%j.out
+#SBATCH -e /scratch/project_2009316/EuSamples/05.BAM/logs/map_%j.err
 #SBATCH --account=project_2009316
-#SBATCH -t 24:00:00
+#SBATCH -t 6:00:00  ##change to 36h for all samples
 #SBATCH -p small
-#SBATCH --array=1-18
+#SBATCH --array=1-2 ##test, later than all 288
 #SBATCH --ntasks 8
 #SBATCH --mem=16G
 #SBATCH --mail-type=START,FAIL,END
@@ -20,12 +24,12 @@
 module load biokit
 module load r-env
 
-cd /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008
+cd /scratch/project_2009316/EuSamples
 
 REFPATH=/scratch/project_2009316/refGenome       
-TRIMPATH=/scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/04.TrimmedData
-TMPBAMPATH=/scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/temp
-BAMPATH=/scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM
+TRIMPATH=/scratch/project_2009316/EuSamples/04.TrimmedData
+TMPBAMPATH=/scratch/project_2009316/EuSamples/temp
+BAMPATH=/scratch/project_2009316/EuSamples/05.BAM
 
 file=$(sed -n "$SLURM_ARRAY_TASK_ID"p name.list)
 shortfile=${file}
@@ -85,11 +89,11 @@ echo "###### DONE! sample ID: $file"
 
 
 ##################################################################
-## Below, we calculate the mean insert sizes per sample directly on the cluster using sinteractive.
+## Below, we calculate the mean insert sizes per sample directly on the cluster using "sinteractive".
 
 sinteractive --account project_2009316 --mem 8000  # requests an interactive job on a compute node
 ## Collect mean insert sizes per sample  --------------------
-cd /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM/stats
+cd /scratch/project_2009316/EuSamples/05.BAM/stats
 
 for i in *_insert_size_metrics.txt; do echo "$i"; awk '/^MEDIAN_INSERT_SIZE/ {getline; print $6}' "$i"; done > all.mean_insert_sizes.tmp
 
@@ -98,7 +102,7 @@ grep 'txt' all.mean_insert_sizes.tmp | perl -npe 's/_insert_size_metrics.txt//' 
 paste tmp2 tmp1 > all.mean_insert_sizes.txt ; rm *tmp*
 
 ## Download the data to the local machine
-scp krapfpat@puhti.csc.fi:/scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM/stats/all.mean_insert_sizes.txt .
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/stats/all.mean_insert_sizes.txt .
 ## Locally, check in your favourite editor the inser size
 
 ####### NOTE: The output txt-file contains the inser sizes per sample, e.g.
@@ -110,7 +114,7 @@ scp krapfpat@puhti.csc.fi:/scratch/project_2009316/DutchSamples/X204SC23115958-Z
 
 ################
 ### Collect mapping rates per sample  --------------------
-cd /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM/nodupl/stats
+cd /scratch/project_2009316/EuSamples/05.BAM/nodupl/stats
 
 for i in *_nodupl.flagstat
  do echo $i ; awk 'FNR == 7' $i
@@ -121,7 +125,7 @@ grep 'flagstat' all.mapping_rates.tmp | perl -npe 's/_nodupl.flagstat//' > tmp2
 paste tmp2 tmp1 > all.mapping_rates.txt ; rm *tmp*
 
 ## Download the mapping rates per sample and check them in your favourite editor.
-scp krapfpat@puhti.csc.fi:/scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM/nodupl/stats/all.mapping_rates.txt .
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/nodupl/stats/all.mapping_rates.txt .
 
 ####### NOTE: The output txt-file contains the mapping rates per sample, e.g.
 ### BBE1_MKDN250052002-1A_235LJ3LT4_L5       63830504 + 0 mapped (99.30%  NA)
