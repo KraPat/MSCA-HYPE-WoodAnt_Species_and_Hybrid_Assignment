@@ -1,5 +1,5 @@
 ## Nex, we will do the mapping.
-##As a first step, we will map the files to a reference hybrid genome, and then sort and index them.
+##As a first step, we will map the files to a reference hybrid genome, and then sort and index them and add the readgroup directly. Note, adding the readgroup here is recommended,  as it can be dne in the same step as the mapping! 
 ## In the second step, we will compute size distributions. In a third step, we will filter (exclude) duplicates
 ## See, the script below.
 ## We need a new folder "05.BAM" and within this folder, a folder called "logs", a folder called "stats", and a folder called "nodupl". Further, within the folder "nodupl", we also need to create a folder called "stats".
@@ -51,7 +51,7 @@ if [ -f "$doneflag" ] && samtools quickcheck "$nodupl"; then
 fi
 
 ###
-### 1. Map, sort & index
+### 1. Map, sort, index, and add Read groups (-R)
 ###
 echo "###### MAPPING"
 
@@ -75,7 +75,7 @@ picard16 CollectInsertSizeMetrics \
     H="${BAMPATH}/stats/${shortfile}_insert_size_hist.pdf"
 
 ###
-### 3. Mark duplicates
+### 3. Mark duplicates 
 ###
 echo "###### MARK DUPLICATES"
 
