@@ -75,7 +75,7 @@ picard16 CollectInsertSizeMetrics \
     H="${BAMPATH}/stats/${shortfile}_insert_size_hist.pdf"
 
 ###
-### 3. Mark duplicates 
+### 3. Mark and remove duplicates 
 ###
 echo "###### MARK DUPLICATES"
 
