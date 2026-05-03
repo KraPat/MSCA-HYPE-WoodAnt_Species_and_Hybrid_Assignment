@@ -1,0 +1,1 @@
+#While in previous pipelines, the read group was added in this step, it was already added in 05_Mapping. Here, for consistency
