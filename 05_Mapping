@@ -6,7 +6,8 @@
 ## you can create them with, e.g.:
 ### mkdir 05.BAM
 ### mkdir 05.BAM/logs ...etc.
-## We will use the same sample file "name.list" as created before for the trimming
+## We will use the same sample file "name.list" as created before for the trimming. 
+## Note, while in previous pipelines, the read group was added after the mapping, it it now already added in the script below.
 ## "vim 5_mapping.sh"
 
 #!/bin/bash -l
