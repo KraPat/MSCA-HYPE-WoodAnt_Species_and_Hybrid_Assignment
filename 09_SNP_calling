@@ -1,0 +1,149 @@
+## First, we need to create a new folder "bam_final" under /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM/bam_final
+## Second, we download / retrieve all BAM files mapped to the hybrid reference genome and put all in the same folder.
+## Before, we run the SNP calling, we need to create a folder for the VCF file, "06.VCF" under /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/
+## Then, we need to split the refenrece genome in equal data size regions to speed up the analysis #https://docs.csc.fi/apps/freebayes/.
+##For this, we use the code below  with sinteractive. 
+
+sinteractive --account project_2009316 --mem 2000
+cd /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF
+nano split_ref_by_bai_datasize.py #paste code from https://github.com/freebayes/freebayes/blob/master/scripts/split_ref_by_bai_datasize.py and change 'python3' into 'python'
+module load biopythontools
+## Note: I have already downloaded the script and pasted it here as a script. Also also the script has run, so no need to do this now. It is here for consistency though.
+
+python split_ref_by_bai_datasize.py \
+-L /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM/bam_final/all.bam.list \
+-r /scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis.fa.fai \
+-s 5000000 > /scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis_5e6_data_regions.fa.fai
+
+#modify regions file so that Freebayes accepts it
+cd /scratch/project_2009316/refGenome
+awk 'BEGIN{OFS=""} {print $1,":",$2,"-",$3}' Formica_hybrid_v1_wFhyb_Sapis_5e6_data_regions.fa.fai > Formica_hybrid_v1_5e6_data_regions.tmp
+
+#remove regions that require different SNP calling parameters if they are needed: mitchondria (mtDNA), Wolbachia (wFhyb*), and Spiroplasma (Spiroplasma*), as well as Scaffold00 
+#that has unmapped reads (for cutting off SNP calling time since it will not be used anyway in the analyses I can think of)
+
+cd /scratch/project_2009316/refGenome/
+
+#grep -v -e mtDNA -e wFhyb -e Spiroplasma Formica_hybrid_v1_50kb_regions.tmp > Formica_hybrid_v1_50kb_regions.txt ; rm Formica_hybrid_v1_50kb_regions.tmp
+grep -v -e mtDNA -e wFhyb -e Spiroplasma -e Scaffold00 Formica_hybrid_v1_5e6_data_regions.tmp > Formica_hybrid_v1_5e6_data_regions.txt ; rm Formica_hybrid_v1_5e6_data_regions.tmp
+#exit sinteractive
+
+
+######################################################################################
+## Below, we start the SNP calling. We use "screen" to run in on a screen for 72 h, see https://linuxize.com/post/how-to-use-linux-screen/?utm_content=cmp-true
+## For this, we also need a bam list "all.bam.list" in the "bam_final" folder using
+#    realpath *bam > all.bam.list
+## We also need to calculate the "--skip-coverage"
+## --skip-coverage = total DP combined across all samples; assuming max 400x per sample per region, 400X per sample * 38 samples = 15200X
+## This will be set in the freebayes code below.
+## An additional note on "--skip-coverage": a value of, e.g., "200" means that each region will be skipped that has a higher sum count of 200. You can also reduced this value by using this idea for --skip-coverage: "Number of samples" x "mean coverage across all samples" x 2
+## We also need a folder "raw" under the bam_final folder
+## To detach from the "screen", use "Ctrl + A, then D". To list screen sessions, use "screen -ls". To reattach, use "screen -r"
+
+###
+### Full SNP calling
+###
+
+screen -S SNPcalling
+
+module load freebayes # version used in 2023: v1.3.6
+
+cd /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF
+REF=/scratch/project_2009316/refGenome
+RES=/scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF
+BAM=/scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM/bam_final
+
+# screen have issues with code on many lines, so instead of backslashes use code on one line
+# freebayes-puhti \
+#  -time 72 \
+#  -mem 64 \
+#  -regions $REF/Formica_hybrid_v1_5e6_data_regions.txt \
+#  -f $REF/Formica_hybrid_v1_wFhyb_Sapis.fa \
+#  -L $BAM/all.bam.list \
+#  -k --genotype-qualities --skip-coverage 15200 \
+#  --limit-coverage 100 \ 
+#  --use-best-n-alleles 3 \
+#  -out $RES/raw/all_samples_raw.vcf
+
+
+freebayes-puhti -time 72 -mem 64 -regions $REF/Formica_hybrid_v1_5e6_data_regions.txt -f $REF/Formica_hybrid_v1_wFhyb_Sapis.fa -L $BAM/all.bam.list -k --genotype-qualities --skip-coverage 15200 --limit-coverage 100 --use-best-n-alleles 3 -out $RES/raw/all_samples_raw.vcf
+
+
+# max mean depth as per 'vcftools --depth' was 46x for sample 108-Flug. Later on all sites that have 2x per ind mean depth are anyway set as '.', which is why limiting to 100x with '--limit-coverage' is safe.
+# -E N=-1 disable complex variants #NOT USED CURRENTLY -  does it mess up w snpgap and vcfallelicprimitives later on?
+# --use-best-n-alleles 3 = reduce computational time to exclude multiple alternative alleles if present. Setting to 3 is safe since all but biallelic sites will be filtered out later on.
+
+
+############# After the SNP calling, we do some sanity checks.
+## For this, we use sinteractive and various tools:
+
+sinteractive --account project_2009316 --mem 2000
+cd /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF/raw
+module load biokit
+
+## 1. Quick format sanity check (fastest)
+## No output means that everything is okay
+bcftools view all_samples_raw.vcf > /dev/null
+## No output → VCF syntax is valid. If there are errors, this means there may be malformed lines, bad genotypes, or header issues
+
+## 2. Inspect the header
+bcftools view -h all_samples_raw.vcf
+## fileformat=VCFv4.2 (or similar) exists
+## source=freeBayes is present
+## FORMAT fields like GT, DP, AD, RO, AO are defined
+## Number of sample columns matches your expectations
+
+## 3. Check for illegal or suspicious variants
+bcftools norm -c w -f /scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis.fa all_samples_raw.vcf > /dev/null
+## This will warn (not modify) about: REF allele mismatches, invalid indels, malformed alleles
+
+## 4. Check chromosome naming
+bcftools query -f '%CHROM\n' all_samples_raw.vcf | sort | uniq
+## Look for chr1 vs 1 mixtures.
+
+bcftools sort -c all_samples_raw.vcf
+## If there is no output, then it is correclty sorted
+## If there are errors, it needs needs sorting
+
+## 5. Summary statistics
+bcftools stats all_samples_raw.vcf > all_samples_raw.stats
+## In the "all_samples_raw.stats" file, information on the number of SNPs, InDels, etc is stored.
+
+
+###############################################################
+## Next, we first sort, then compress the VCF file, and lastly index it. 
+## We use the script below and run it on the cluster
+
+###
+### Sort & compress
+###
+
+#!/bin/bash -l
+#SBATCH -J comp_sort
+#SBATCH -o /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF/raw/compress_sort.out
+#SBATCH -e /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF/raw/compress_sort.err
+#SBATCH --account=project_2009316
+#SBATCH -t 24:00:00
+#SBATCH -p small
+#SBATCH --ntasks 1
+#SBATCH --mem=8G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+module load biokit
+cd /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF/raw
+
+# In the next step we "Sort" and "compress" the VCF file in one step.
+bcftools sort -m 1G freebayes.vcf -Oz -o all_samples_raw.vcf.gz -T ./tmp_sort all_samples_raw.vcf.gz
+
+## Compress
+## bgzip all_samples_raw.vcf 
+#samtools version 1.16.1, containing HTSlib 1.16
+#This step is actually not needed as we already compressed it above when sorting!
+
+# Index
+tabix -p vcf all_samples_raw.vcf.gz
+bcftools index -n all_samples_raw.vcf.gz
+
+gunzip -c all_samples_raw.vcf.gz | grep -v "^#" | cut -f 1 | uniq -c > site_count_per_chromosome.tab
+
+### END
