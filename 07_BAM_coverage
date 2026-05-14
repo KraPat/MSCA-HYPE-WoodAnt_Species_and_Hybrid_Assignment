@@ -1,7 +1,7 @@
-## NOTE, after mapping, filtering, and duplicate removal, we now compute the sequencing depth per sample.
-## The code calculates 10-kb windowed coverage for each BAM file, using 1 thread, excluding low-quality/secondary/supplementary reads, outputting only summary and region coverage files.
+## NOTE, after mapping, filtering, duplicate removal, and merging BAM files, we now compute the sequencing depth per sample.
+## The code calculates 10-kb windowed coverage for each BAM file, using 1 thread, excluding low-quality, secondary, or supplementary reads, outputting only summary and region coverage files.
 ## For this, we need to create a "nodupl_name.list". We could use a previous file but we will use a fewer samples because not all samples will be further used.
-## Create the file by "ls" and excluding the unwanted files.
+## Create the file by "ls *bam > nodupl_name.list" and excluding the unnecessary files.
 ## We also need to create the subfolders "coverage" under /scratch/project_2009316/EuSamples/05.BAM/stats. Then we calculate the depth.
 
 
@@ -20,7 +20,7 @@
 #Note, we need to export the path here, so that mosdepth is loaded
 export PATH="/projappl/project_2009316/myenv/bin:$PATH"
 
-FINALDIR=/scratch/project_2009316/EuSamples/05.BAM/nodupl_RG
+FINALDIR=/scratch/project_2009316/EuSamples/05.BAM/nodupl
 
 cd /scratch/project_2009316/EuSamples/05.BAM/nodupl
 
@@ -30,12 +30,15 @@ file=$(sed -n "$SLURM_ARRAY_TASK_ID"p nodupl_name.list)
 # Get sample ID
 sample=${file%_nodupl*}
 
-mosdepth -t 1 -b 10000 -n -x ../stats/coverage/$sample $FINALDIR/$sample"_nodupl_wRG.bam"
-mosdepth -t 1 -b 10000 -n ../stats/coverage/${sample}_overlap_correction $FINALDIR/$sample"_nodupl_wRG.bam"
+mosdepth -t 1 -b 10000 -n -x ../stats/coverage/$sample $FINALDIR/$sample"_nodupl.bam"
+mosdepth -t 1 -b 10000 -n ../stats/coverage/${sample}_overlap_correction $FINALDIR/$sample"_nodupl.bam"
 
 ### END
 
+#########################################################
+## Now, we will calcualted the coverage locally on the cluster using sinteractive. 
 
+sinteractive
 ### Get coverage for overlap corrected data  --------------------
 
 cd /scratch/project_2009316/EuSamples/05.BAM/stats/coverage
@@ -57,10 +60,11 @@ grep -v 'txt' all.overlap_correction_no0003.mosdepth.summary.tmp > tmp1
 grep 'txt' all.overlap_correction_no0003.mosdepth.summary.tmp | perl -npe 's/_overlap_correction_no0003.mosdepth.summary.txt//' > tmp2
 paste tmp2 tmp1 > all.overlap_correction_no0003.mosdepth.summary.txt ; rm *tmp*
 
-## Do:wnload to local maching
+## Now, we download the files to our local machine
 #scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/stats/coverage/all.overlap_correction_no0003.mosdepth.summary.txt .
 
 
+## Below, we also calculate the coverage for data not corrected for overlaps
 ### Get coverage for *NON* overlap corrected data  --------------------
 
 for i in $(ls *.mosdepth.summary.txt | grep -v overlap_correction); do
@@ -74,16 +78,7 @@ paste tmp2 tmp1 > all.no_overlap_correction.mosdepth.summary.txt
 rm *tmp*
 
 
-## Not needed to use this as this was a sample in Ina's data set
-#for i in RN???.mosdepth.summary.txt
-# do echo $i ; grep 'Scaffold' $i | awk '{sum+=$4;} END{print sum/NR;}'
-#done > all.no_overlap_correction.mosdepth.summary.tmp
-
-#grep -v 'txt' all.no_overlap_correction.mosdepth.summary.tmp > tmp1
-#grep 'txt' all.no_overlap_correction.mosdepth.summary.tmp | perl -npe 's/.mosdepth.summary.txt//' > tmp2
-#paste tmp2 tmp1 > all.no_overlap_correction.mosdepth.summary.txt ; rm *tmp*
-
-## Download to local machine
+## Again, we download the file to the local machine
 #scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/stats/coverage/all.no_overlap_correction.mosdepth.summary.txt .
 
 
