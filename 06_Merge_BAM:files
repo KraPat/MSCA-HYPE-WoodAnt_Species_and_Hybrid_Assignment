@@ -1,0 +1,14 @@
+## In this next step, we merge BAM files from the same samples. 
+
+## For this, we first create a "names_list" file using the code 
+ls *.bam | cut -d'_' -f1,2,3,4 | sort -u > "names_list"
+
+## Since we combined different sequencing runs, we need to manually check the resulting file and only keep the ones that we need to merge.
+## Then, we use the following script "" to merge files using samtools merge. 
+
+
+
+#While in previous pipelines, the read group was added in this step, it was already added in 05_Mapping. Here, for consistency
+
+
+
