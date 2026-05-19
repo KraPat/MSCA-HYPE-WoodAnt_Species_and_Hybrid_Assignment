@@ -44,7 +44,7 @@ sinteractive
 cd /scratch/project_2009316/EuSamples/05.BAM/stats/coverage
 rm -rf *global*
 
-for i in *overlap_correction.mosdepth.summary.txt; do echo $i; grep 'Scaffold' "$i" | awk '{sum+=$4} END{print sum/NR}'; done > all.overlap_clip_correction.mosdepth.summary.tmp
+for i in *overlap_clip_correction.mosdepth.summary.txt; do echo $i; grep 'Scaffold' "$i" | awk '{sum+=$4} END{print sum/NR}'; done > all.overlap_clip_correction.mosdepth.summary.tmp
 
 grep -v 'txt' all.overlap_clip_correction.mosdepth.summary.tmp > tmp1
 grep 'txt' all.overlap_clip_correction.mosdepth.summary.tmp | perl -npe 's/_overlap_correction.mosdepth.summary.txt//' > tmp2
@@ -63,15 +63,20 @@ paste tmp2 tmp1 > all.overlap_clip_correction_no0003.mosdepth.summary.txt ; rm *
 ## Now, we download the files to our local machine
 #scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/stats/coverage/all.overlap_clip_correction_no0003.mosdepth.summary.txt .
 
+###Note, a few files have a low coverage of 1-2, which may need to be excluded
+#Others have a coverage of 6-7, and most above 8
+# For now, we will include all of them and then exclude them in the VCF
 
+
+######################
 ## Below, we also calculate the coverage for data not corrected for overlaps
 ### Get coverage for *NON* overlap corrected data  --------------------
 ## NOTE, this has already been calculated earlier in step 06.2_BAM_coverage
 
-#for i in $(ls *.mosdepth.summary.txt | grep -v overlap_correction); do
-#  echo $i
-#  grep 'Scaffold' "$i" | awk '{sum+=$4} END{print sum/NR}'
-#done > all.no_overlap_correction.mosdepth.summary.tmp
+for i in $(ls *.mosdepth.summary.txt | grep -v overlap_correction); do
+  echo $i
+  grep 'Scaffold' "$i" | awk '{sum+=$4} END{print sum/NR}'
+done > all.no_overlap_correction.mosdepth.summary.tmp
 
 #grep -v 'txt' all.no_overlap_correction.mosdepth.summary.tmp > tmp1
 #grep 'txt' all.no_overlap_correction.mosdepth.summary.tmp | perl -npe 's/.mosdepth.summary.txt//' > tmp2
