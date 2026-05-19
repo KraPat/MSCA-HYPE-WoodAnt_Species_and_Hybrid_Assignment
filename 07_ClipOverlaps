@@ -65,8 +65,8 @@ samtools index "$FINALDIR/${sample}_nodupl_wRG_clip.bam"
 
 ## Below, we will work on the cluster using sinteractive to assess whether the BAM files are correct.
 ## In the next step, we will calculate the BAM coverage after clipping.
-#sinteractive --account project_2009316 --mem 8000
-#module load biokit
+sinteractive --account project_2009316 --mem 8000
+module load biokit
 
 ### Check that the bam files are alright: -------
 ## Unclipped ## -------
@@ -80,6 +80,7 @@ picard ValidateSamFile I=A_74a_EKDN240013500-1A_223FHVLT4_L7_nodupl_wRG.bam R=/s
 ## Clipped ## -------
 cd /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 picard ValidateSamFile I=A_74a_EKDN240013500-1A_223FHVLT4_L7_nodupl_wRG_clip.bam R=/scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis.fa MODE=SUMMARY
+
 ## HISTOGRAM	java.lang.String
 #Error Type	Count
 #ERROR:CIGAR_MAPS_OFF_REFERENCE	655
