@@ -7,8 +7,10 @@ cd /scratch/project_2009316/EuSamples/05.BAM/nodupl
 ls *bam | sort -nk1,1 > input.list ; cd .. #sort numeric, according to position 1,1
 
 # Then, we create the output folder
-mkdir /scratch/EuSamples/05.BAM/nodupl_clip
+mkdir /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 
+#and the Script 
+vim "7_ClipOverlap.sh"
 
 ###
 ### sbatch script below ------------------------------------------------------------------------
