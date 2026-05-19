@@ -39,33 +39,32 @@ FINALDIR=/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 
 # Get file & sample ID
 file=$(sed -n "$SLURM_ARRAY_TASK_ID"p input.list)
-sample=${file%_nodupl_wRG*}
+sample=${file%_nodupl*}
 
 echo "### Processing $file"
-
 
 ###
 ### Clip overlaps
 ###
 
 # Reads are sorted by coordinates (see "samtools sort" command after mapping)
-bam clipOverlap --in $INPUTDIR/${sample}"_nodupl.bam" --out $FINALDIR/${sample}"_nodupl_wRG_clip.bam" --stats --params
+bam clipOverlap --in "$INPUTDIR/$file" --out "$FINALDIR/${sample}_nodupl_wRG_clip.bam" --stats --params
+#NOTE: we add here "wRG" because read groups have been added in the previous mapping step, 05_Mapping
 
 
 ###
 ### Index
 ###
 
-samtools index $FINALDIR/$sample"_nodupl_wRG_clip.bam"
-
+samtools index "$FINALDIR/${sample}_nodupl_wRG_clip.bam"
 
 ### END OF THE SCRIPT
 
 
 ####################################################################################
 
-
-## Below, we will work on the cluster using sinteractive
+## Below, we will work on the cluster using sinteractive to assess whether the BAM files are correct.
+## In the next step, we will calculate the BAM coverage after clipping.
 #sinteractive --account project_2009316 --mem 8000
 #module load biokit
 
