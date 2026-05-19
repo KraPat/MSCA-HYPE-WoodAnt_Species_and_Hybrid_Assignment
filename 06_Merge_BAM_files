@@ -4,11 +4,46 @@
 ls *.bam | cut -d'_' -f1,2,3,4 | sort -u > "names_list"
 
 ## Since we combined different sequencing runs, we need to manually check the resulting file and only keep the ones that we need to merge.
-## Then, we use the following script "" to merge files using samtools merge. 
+## Then, we use the following script "6_MergeBAMs.sh" to merge files using samtools merge. 
+
+#!/bin/bash -l
+#SBATCH -J mergeBAMfiles
+#SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/mergeBAM_%j.out
+#SBATCH -e /scratch/project_2009316/EuSamples/05.BAM/logs/mergeBAM_%j.err
+#SBATCH --account=project_2009316
+#SBATCH -t 24:00:00  ##change to 36 for all samples
+#SBATCH -p small
+#SBATCH --array=2-1g  ##test, later use the rest, all 2-14
+#SBATCH --ntasks 8
+#SBATCH --mem=32G
+#SBATCH --mail-type=START,FAIL,END
+
+module load biokit
+
+set -euo pipefail
+
+cd /scratch/project_2009316/EuSamples/05.BAM/nodupl
+
+###
+### 1. Merge, sort, and index BAM files ------------------------------------------------
+###
+
+# samples.list is a file created manually by "(ls *.bam | cut -d'_' -f1,2,3,4 | sort -u) > samples_list" and then manually check which BAM files need to be merged
+mapfile -t samples_list < samples_list
+
+# Pick the sample for this array task (arrays are 1-based, bash arrays 0-based)
+idx=$((SLURM_ARRAY_TASK_ID - 1))
+sample="${samples_list[$idx]}"
+
+echo "Task $SLURM_ARRAY_TASK_ID processing sample: $sample"
+echo ${sample}_*.bam
+
+samtools merge -u - ${sample}_*.bam \
+    | samtools sort -@ 8 -o ${sample}.sorted.bam
+
+samtools index ${sample}.sorted.bam
+
+### This is the end
 
 
-
-#While in previous pipelines, the read group was added in this step, it was already added in 05_Mapping. Here, for consistency
-
-
-
+## NOTE: While in previous pipelines, the read group was added in this step, it was already added in 05_Mapping. Here, for consistency
