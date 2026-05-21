@@ -2,7 +2,9 @@
 This repository contains scripts to identify Formica wood ant species and assign hybrid status using whole-genome sequencing in the MSCA project HYPE 
 
 How to read the repository files.
+
 Comments start with two ## followed by the text or descriptions
+
 Each major step conducted on the Finnish cluster (a slurm-based machine) such as downloading, trimming, mapping, etc. is presented in a different file
 Within the files, information on various steps is presented as well as the scripts with the respective codes. The start and end of a script is indicated by multiple hashtags:
 #################################################################################################################################
