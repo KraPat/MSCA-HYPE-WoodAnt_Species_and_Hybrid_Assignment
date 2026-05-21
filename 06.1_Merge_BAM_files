@@ -5,7 +5,9 @@ ls *.bam | cut -d'_' -f1,2,3,4 | sort -u > "names_list"
 
 ## Since we combined different sequencing runs, we need to manually check the resulting file and only keep the ones that we need to merge.
 ## Then, we use the following script "6_MergeBAMs.sh" to merge files using samtools merge. 
+## NOTE: While in previous pipelines, the read group was added in this step, it was already added in 05_Mapping. Here, for consistency
 
+#################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J mergeBAMfiles
 #SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/mergeBAM_%j.out
@@ -44,6 +46,6 @@ samtools merge -u - ${sample}_*.bam \
 samtools index ${sample}.sorted.bam
 
 ### This is the end
+#################################################################################################################################
 
 
-## NOTE: While in previous pipelines, the read group was added in this step, it was already added in 05_Mapping. Here, for consistency
