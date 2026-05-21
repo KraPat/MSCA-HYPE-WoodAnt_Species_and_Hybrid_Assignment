@@ -1,7 +1,16 @@
 ## NOTE, after mapping, filtering, duplicate removal, merging, and clipping BAM files, we now compute the sequencing depth per sample.
+## For this, we now finally move all BAM files to the folder "bam_final", includint their index .bai files.
+## Mv from "DutchFiles"
+mv *nodupl_wRG_clip.bam ../../../../EuSamples/05.BAM/bam_final/
+mv *_wRG_clip.bam.bai ../../../../EuSamples/05.BAM/bam_final/
+
+## mv from /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
+mv *nodupl_wRG_clip.bam ../bam_final/
+## Note, after moving, there are now 389 bam files
+
 ## The code calculates 10-kb windowed coverage for each BAM file, using 1 thread, excluding low-quality, secondary, or supplementary reads, outputting only summary and region coverage files.
 ## For this, we need to create a "bam_final.list". We could use a previous file but we will use a fewer samples because not all samples will be further used.
-## Create the file by "ls *bam > bam_final.list" and excluding the unnecessary files, e.g., the unmerged files.
+## Create the file by "ls *.bam > bam_final.list" and excluding the unnecessary files, e.g., the unmerged files.
 ## We have already created the subfolder "coverage" under /scratch/project_2009316/EuSamples/05.BAM/stats. Now we calculate the depth for the clipped files.
 
 #################################################################################################################################
