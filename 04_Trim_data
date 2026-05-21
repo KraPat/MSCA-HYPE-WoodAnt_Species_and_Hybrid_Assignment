@@ -2,18 +2,20 @@
 ## We will also quality check the sequences with fastqc and the multiqc. At the end, we will download these files and check them locally
 ## For this, we create a script, called "trim.sh"
 ## We also need a file "name.list", which stores the names of the files without "_1.fq.gz" in it. You can get these by
-##"ls 03.CombinedRawData/*1.fq.gz > name.list1"  followed by
-##"sed 's/_1\.fq\.gz$//' name.list1 > name.list"
+"ls 03.CombinedRawData/*1.fq.gz > name.list1"  followed by
+"sed 's/_1\.fq\.gz$//' name.list1 > name.list"
 ## We also need a new folder, "04.TrimmedData", and within this, a folder called "unpair" for the unpaired data, and a folder called "logs" for the output files, as well as a folder "FastQC" for the FastQC output. Within "FastQC", we also need to create a folder called "results"
 
-### nano trim.sh
-### chmod +x trim.sh  #this makes the script usable (runable) in Bash
-### ls -l trim.sh  #here, you check if can be run
-### sbatch --array=1,2 trim.sh  #with this code, you run an array job, where you create multiple subjobs for each file, e.g. 18 for the 18 wood ant samples
-### squeue -u $USER  #check if the script runs
+vim trim.sh
+chmod +x trim.sh  #this makes the script usable (runable) in Bash
+ls -l trim.sh  #here, you check if can be run
+## Note: sbatch --array=1,2 trim.sh  #with this code, you run an array job, where you create multiple subjobs for each file, e.g. 18 for the 18 wood ant samples
+## squeue -u $USER  #check if the script runs
 
 ## Below is the acutal code which is stored in the script
-# 4_trim.sh
+## 4_trim.sh
+
+#################################################################################################################################
 
 #!/bin/bash -l 
 #SBATCH -J trim
@@ -55,5 +57,7 @@ fastqc 04.TrimmedData/$file"_2.trim.pair.fq.gz" -o 04.TrimmedData/FastQC
 module load multiqc/1.19
 multiqc /scratch/project_2009316/EuSamples/04.TrimmedData/FastQC/*fastqc.zip -o /scratch/project_2009316/EuSamples/04.TrimmedData/FastQC/results/
 
-## DOWNLOAD FROM HPC TO LOCAL COMPUTER     # "." means current working directory on local machine; download while being on local machine
+#################################################################################################################################
+
+## NOW, download this file from the HPC to your local machine     # "." means current working directory on local machine; download while being on local machine
 #scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/04.TrimmedData/FastQC/results/*.html .
