@@ -4,7 +4,7 @@
 ## Create the file by "ls *bam > nodupl_name.list" and excluding the unnecessary files.
 ## We also need to create the subfolders "coverage" under /scratch/project_2009316/EuSamples/05.BAM/stats. Then we calculate the depth.
 
-
+#################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J mosdepth
 #SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/mosdepth_%j.out
@@ -35,9 +35,12 @@ mosdepth -t 1 -b 10000 -n ../stats/coverage/${sample}_overlap_correction $FINALD
 
 ### END
 
-#########################################################
+#################################################################################################################################
+
+
 ## Now, we will calcualted the coverage locally on the cluster using sinteractive. 
 
+##############################################
 sinteractive
 ### Get coverage for overlap corrected data  --------------------
 
@@ -60,6 +63,7 @@ grep -v 'txt' all.overlap_correction_no0003.mosdepth.summary.tmp > tmp1
 grep 'txt' all.overlap_correction_no0003.mosdepth.summary.tmp | perl -npe 's/_overlap_correction_no0003.mosdepth.summary.txt//' > tmp2
 paste tmp2 tmp1 > all.overlap_correction_no0003.mosdepth.summary.txt ; rm *tmp*
 
+##############################################
 ## Now, we download the files to our local machine
 #scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/stats/coverage/all.overlap_correction_no0003.mosdepth.summary.txt .
 
@@ -67,6 +71,7 @@ paste tmp2 tmp1 > all.overlap_correction_no0003.mosdepth.summary.txt ; rm *tmp*
 ## Below, we also calculate the coverage for data not corrected for overlaps
 ### Get coverage for *NON* overlap corrected data  --------------------
 
+##############################################
 for i in $(ls *.mosdepth.summary.txt | grep -v overlap_correction); do
   echo $i
   grep 'Scaffold' "$i" | awk '{sum+=$4} END{print sum/NR}'
@@ -76,7 +81,7 @@ grep -v 'txt' all.no_overlap_correction.mosdepth.summary.tmp > tmp1
 grep 'txt' all.no_overlap_correction.mosdepth.summary.tmp | perl -npe 's/.mosdepth.summary.txt//' > tmp2
 paste tmp2 tmp1 > all.no_overlap_correction.mosdepth.summary.txt
 rm *tmp*
-
+##############################################
 
 ## Again, we download the file to the local machine
 #scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/stats/coverage/all.no_overlap_correction.mosdepth.summary.txt .
