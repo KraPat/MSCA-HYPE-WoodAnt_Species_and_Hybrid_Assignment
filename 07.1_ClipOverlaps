@@ -13,10 +13,6 @@ mkdir /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 vim "7_ClipOverlap.sh"
 
 #################################################################################################################################
-###
-### sbatch script below ------------------------------------------------------------------------
-###
-
 #!/bin/bash -l
 #SBATCH -J clipOverlap
 #SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/clipOverlap_%j.out
