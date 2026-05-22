@@ -1,5 +1,8 @@
 ## NOTE, after mapping, filtering, duplicate removal, merging, and clipping BAM files, we now compute the sequencing depth per sample.
 ## For this, we now finally move all BAM files to the folder "bam_final", includint their index .bai files.
+## So, we need to create a new folder "bam_final" under /scratch/project_2009316/EuSamples/05.BAM/bam_final
+## Second, we download / retrieve all BAM files mapped to the hybrid reference genome and put all in the same folder.
+
 ## Mv from "DutchFiles"
 mv *nodupl_wRG_clip.bam ../../../../EuSamples/05.BAM/bam_final/
 mv *_wRG_clip.bam.bai ../../../../EuSamples/05.BAM/bam_final/
