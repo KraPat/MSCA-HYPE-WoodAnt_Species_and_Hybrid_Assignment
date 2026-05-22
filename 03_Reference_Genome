@@ -1,0 +1,17 @@
+## Download the new reference genome and get it ready to be used.
+## Note, this new reference genome replaces the previous one and all samples need to be re-mapped to it.
+
+wget ...
+
+## Now, we are using sinteractive, to unzip the reference genome, index it for samtools as well as for bwa.
+sinteractive
+## 1) Unzip
+gunzip Frufa_PR_May2026.fa.gz   # produces genome.fa
+
+## 2) FASTA index for samtools, bcftools, etc.
+module load biokit
+samtools faidx Frufa_PR_May2026.fa    # creates genome.fa.fai
+
+## 3) Index for your aligner (pick one):
+## for BWA
+bwa index Frufa_PR_May2026.fa         # creates .amb, .ann, .bwt, .pac, .sa

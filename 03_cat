@@ -1,1 +1,0 @@
-## NOTE: In previous steps, raw fq files were concatenated, which is not ideal. Instead, BAM files are now merged, see 06.1_Merge_BAM_files
