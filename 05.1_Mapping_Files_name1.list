@@ -1,0 +1,169 @@
+## Next, we will do the mapping.
+## As a first step, we will map the files to the new reference genome, and then sort and index them and add the readgroup directly. Note, adding the readgroup here is recommended,  as it can be dne in the same step as the mapping! 
+## In the second step, we will compute size distributions. In a third step, we will filter (exclude) duplicates
+## See, the script below.
+## We need a new folder "05.BAM" and within this folder, a folder called "logs", a folder called "stats", and a folder called "nodupl". Further, within the folder "nodupl", we also need to create a folder called "stats".
+## you can create them with, e.g.:
+### mkdir 05.BAM
+### mkdir 05.BAM/logs ...etc.
+## We will create new sample file lists "Files_name1.list", "Files_name2.list", "Files_name3.list" for the mapping.
+ls 04.TrimmedData/*1.trim.* > Files_name1.list.tmp #followed by
+sed 's/_1\.fq\.gz$//' Files_name1.list.tmp > Files_name1.list
+#This lists all the 121 (actually 242 because R1 and R2) new samples sequenced in 2026
+
+ls 04.TrimmedData/*trim_pair_1* > Files_name2.list.tmp #followed by
+sed 's/_1\.fq\.gz$//' Files_name2.list.tmp > Files_name2.list
+rm Files_name2.list.tmp
+## This lists all 154 (actually 308 because R1 and R2) earlier samples
+
+##ls 04.TrimmedData/*trim_pair_1* > Files_name2.list.tmp #followed by
+##sed 's/_1\.fq\.gz$//' Files_name2.list.tmp > Files_name2.list
+## This lists all xx (actually xx because R1 and R2) earlier samples
+
+## "vim 5_mapping1.sh"
+
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J map
+#SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/map_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/05.BAM/logs/map_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 24:00:00
+#SBATCH -p small
+#SBATCH --array=1-2 ## change accordingly to samples
+#SBATCH --ntasks=8
+#SBATCH --mem=16G
+#SBATCH --mail-type=START,FAIL,END
+
+module load biokit
+module load r-env
+
+set -euo pipefail
+
+cd /scratch/project_2009316/EuSamples
+
+REFPATH=/scratch/project_2009316/rufaRefGenome       
+TRIMPATH=/scratch/project_2009316/EuSamples/04.TrimmedData
+TMPBAMPATH=/scratch/project_2009316/EuSamples/temp
+BAMPATH=/scratch/project_2009316/EuSamples/05.BAM
+
+## Files_name1.list
+file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" Files_name1.list)  #change accordingly "Files_name1.list"
+#shortfile=${file}
+
+echo "###### STARTING file: $file (sample: $shortfile)"
+
+# Define paths
+tmpbam="${TMPBAMPATH}/${shortfile}.bam.tmp"
+bam="${TMPBAMPATH}/${shortfile}.bam"
+nodupl="${BAMPATH}/nodupl/${shortfile}_nodupl_RG.bam"
+doneflag="${nodupl}.done"
+
+# Skip completed samples
+if [ -f "$doneflag" ] && samtools quickcheck "$nodupl"; then
+    echo "###### SKIPPING $shortfile (already done)"
+    exit 0
+fi
+
+###
+### 1. Map, sort, index, and add Read groups (-R)
+###
+echo "###### MAPPING"
+
+## Below, is the code for the new 2026 sequences and Files_name1.list
+bwa mem -t8 "${REFPATH}/Frufa_PR_May2026.fa" \
+    -R "@RG\tID:${shortfile}\tSM:${shortfile}\tPL:ILLUMINA\tLB:1\tPU:1" \
+    "${TRIMPATH}/${file}_1.trim.pair.fq.gz" \    
+    "${TRIMPATH}/${file}_2.trim.pair.fq.gz" \    
+    | samtools sort -@8 -m512M -o "$tmpbam"
+
+mv "$tmpbam" "$bam"
+samtools index -@4 "$bam"
+
+###
+### 2. Insert size
+###
+echo "###### INSERT SIZE"
+
+picard16 CollectInsertSizeMetrics \
+    I="$bam" \
+    O="${BAMPATH}/stats/${shortfile}_insert_size_metrics.txt" \
+    H="${BAMPATH}/stats/${shortfile}_insert_size_hist.pdf"
+
+###
+### 3. Mark and remove duplicates 
+###
+echo "###### MARK DUPLICATES"
+
+picard16 MarkDuplicates \
+    I="$bam" \
+    O="$nodupl" \
+    M="${BAMPATH}/nodupl/stats/${shortfile}_dupl_metrics.txt" \
+    REMOVE_DUPLICATES=true \
+    TMP_DIR="$TMPBAMPATH"
+
+###
+### 4. Index + stats
+###
+echo "###### FINAL STATS"
+
+samtools index -@4 "$nodupl"
+
+samtools flagstat -@4 "$nodupl" > "${BAMPATH}/nodupl/stats/${shortfile}_nodupl_RG.flagstat"
+samtools idxstats -@4 "$nodupl" > "${BAMPATH}/nodupl/stats/${shortfile}_nodupl_RG.idxstat"
+
+# Mark completion
+touch "$doneflag"
+
+echo "###### DONE $shortfile"
+
+#################################################################################################################################
+
+
+## Below, we calculate the mean insert sizes per sample directly on the cluster using "sinteractive".
+
+##############################################
+sinteractive --account project_2009316 --mem 8000  # requests an interactive job on a compute node
+## Collect mean insert sizes per sample  --------------------
+cd /scratch/project_2009316/EuSamples/05.BAM/stats
+
+for i in *_insert_size_metrics.txt; do echo "$i"; awk '/^MEDIAN_INSERT_SIZE/ {getline; print $6}' "$i"; done > all.mean_insert_sizes.tmp
+
+grep -v 'txt' all.mean_insert_sizes.tmp > tmp1
+grep 'txt' all.mean_insert_sizes.tmp | perl -npe 's/_insert_size_metrics.txt//' > tmp2
+paste tmp2 tmp1 > all.mean_insert_sizes.txt ; rm *tmp*
+
+##############################################
+
+## Download the data to the local machine and check it there
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/stats/all.mean_insert_sizes.txt .
+## Locally, check in your favourite editor the inser size
+
+####### NOTE: The output txt-file contains the inser sizes per sample, e.g.
+### The standard Illumina paired-end insert size is 150-300
+### 300–600 bp	would be a large-fragment library
+### <150 bp indicated degraded DNA or over-fragmentation
+### >600 bp	unusual, long-fragment library
+
+
+### Now, we calculate the mapping rates per sample using sinteracive and download these as well
+##############################################
+cd /scratch/project_2009316/EuSamples/05.BAM/nodupl/stats
+
+for i in *_nodupl.flagstat
+ do echo $i ; awk 'FNR == 7' $i
+done > all.mapping_rates.tmp
+
+grep -v 'flagstat' all.mapping_rates.tmp > tmp1
+grep 'flagstat' all.mapping_rates.tmp | perl -npe 's/_nodupl.flagstat//' > tmp2
+paste tmp2 tmp1 > all.mapping_rates.txt ; rm *tmp*
+
+##############################################
+## Download the mapping rates per sample and check them in your favourite editor.
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/nodupl/stats/all.mapping_rates.txt .
+
+####### NOTE: The output txt-file contains the mapping rates per sample, e.g.
+### sample H_627_A       11292839 + 0 mapped (99.05% : N/A)
+### It shows that the 99.050% of all reads in that BAM file have been aligned to the genome.
+### The remaining ~0.95% were unmapped, meaning they did not match the reference sufficiently (due to low quality, contamination, divergence, etc.).
+### Most of the samples were mapped with >90%, except for 4 samples that were between 80 and 90% and 1 sample with 75%
