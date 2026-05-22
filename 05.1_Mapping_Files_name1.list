@@ -11,15 +11,6 @@ ls 04.TrimmedData/*1.trim.* > Files_name1.list.tmp #followed by
 sed 's/_1\.fq\.gz$//' Files_name1.list.tmp > Files_name1.list
 #This lists all the 121 (actually 242 because R1 and R2) new samples sequenced in 2026
 
-ls 04.TrimmedData/*trim_pair_1* > Files_name2.list.tmp #followed by
-sed 's/_1\.fq\.gz$//' Files_name2.list.tmp > Files_name2.list
-rm Files_name2.list.tmp
-## This lists all 154 (actually 308 because R1 and R2) earlier samples
-
-##ls 04.TrimmedData/*trim_pair_1* > Files_name2.list.tmp #followed by
-##sed 's/_1\.fq\.gz$//' Files_name2.list.tmp > Files_name2.list
-## This lists all xx (actually xx because R1 and R2) earlier samples
-
 ## "vim 5_mapping1.sh"
 
 #################################################################################################################################
