@@ -23,7 +23,7 @@ sed 's/_1\.fq\.gz$//' Files_name1.list.tmp > Files_name1.list
 #SBATCH -p small
 #SBATCH --array=1-2 ## change accordingly to samples
 #SBATCH --ntasks=8
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 #SBATCH --mail-type=START,FAIL,END
 
 module load biokit
