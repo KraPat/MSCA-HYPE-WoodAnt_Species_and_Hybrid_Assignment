@@ -1,14 +1,13 @@
-## First, we need to create a new folder "bam_final" under /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/05.BAM/bam_final
-## Second, we download / retrieve all BAM files mapped to the hybrid reference genome and put all in the same folder.
-## Before, we run the SNP calling, we need to create a folder for the VCF file, "06.VCF" under /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/
-## Then, we need to split the refenrece genome in equal data size regions to speed up the analysis #https://docs.csc.fi/apps/freebayes/.
-##For this, we use the code below  with sinteractive. 
+## Before, we run the SNP calling, we need to create a folder for the VCF file, "06.VCF" under /scratch/project_2009316/EuSamples/
+## Then, we need to split the refenrece genome in equal data size regions to speed up the analysis. See the software information: https://docs.csc.fi/apps/freebayes/. For this, we use the code below from the freebayes GitHub page, using sinteractive. 
 
+##############################################
 sinteractive --account project_2009316 --mem 2000
 cd /scratch/project_2009316/EuSamples/06.VCF
-nano split_ref_by_bai_datasize.py #paste code from https://github.com/freebayes/freebayes/blob/master/scripts/split_ref_by_bai_datasize.py and change 'python3' into 'python'
+nano split_ref_by_bai_datasize.py
+## NOW, copy-paste the code from https://github.com/freebayes/freebayes/blob/master/scripts/split_ref_by_bai_datasize.py and change 'python3' into 'python'
 module load biopythontools
-## Note: I have already downloaded the script and pasted it here as a script. Also also the script has run, so no need to do this now. It is here for consistency though.
+## Note: I have already downloaded the script and pasted it here as a script. Also also the script has run, so no need to do this now. It is here for the sake of completeness.
 
 python split_ref_by_bai_datasize.py \
 -L /scratch/project_2009316/EuSamples/05.BAM/bam_final/all.bam.list \
