@@ -34,6 +34,14 @@ module load r-env
 
 set -euo pipefail
 
+cd /scratch/project_2009316/EuSamples
+
+REFPATH=/scratch/project_2009316/rufaRefGenome       
+TRIMPATH=/scratch/project_2009316/EuSamples/04.TrimmedData
+TMPBAMPATH=/scratch/project_2009316/EuSamples/temp
+BAMPATH=/scratch/project_2009316/EuSamples/05.BAM
+
+## Files_name2.list
 # Get R1 filename (without path) from array file
 file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" Files_name2.list)
 
@@ -69,11 +77,15 @@ fi
 ###
 echo "###### MAPPING"
 
-# R1 is exactly the filename from the list, with TRIMPATH prepended
-R1="${TRIMPATH}/${file}"
+# Construct R1/R2 by adding the pair suffixes
+R1="${TRIMPATH}/${file}_pair_1.fq.gz"
+R2="${TRIMPATH}/${file}_pair_2.fq.gz"
 
-# R2: replace _pair_1.fq.gz with _pair_2.fq.gz
-R2="${R1/_pair_1.fq.gz/_pair_2.fq.gz}"
+echo "R1: $R1"
+echo "R2: $R2"
+
+# (optional, but very helpful for debugging)
+ls -l "$R1" "$R2"
 
 bwa mem -t 8 "${REFPATH}/Frufa_PR_May2026.fa" \
     -R "@RG\tID:${shortfile}\tSM:${shortfile}\tPL:ILLUMINA\tLB:1\tPU:1" \
@@ -95,7 +107,7 @@ picard16 CollectInsertSizeMetrics \
     H="${BAMPATH}/stats/${shortfile}_insert_size_hist.pdf"
 
 ###
-### 3. Mark and remove duplicates 
+### 3. Mark and remove duplicates
 ###
 echo "###### MARK DUPLICATES"
 
