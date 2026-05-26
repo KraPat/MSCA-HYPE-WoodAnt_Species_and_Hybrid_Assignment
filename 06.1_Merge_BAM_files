@@ -15,7 +15,7 @@ ls *.bam | cut -d'_' -f1,2,3,4 | sort -u > "names_list"
 #SBATCH --account=project_2009316
 #SBATCH -t 24:00:00  ##change to 36 for all samples
 #SBATCH -p small
-#SBATCH --array=2-1g  ##test, later use the rest, all 2-14
+#SBATCH --array=1-2  ##test, later use the rest, all 3-14
 #SBATCH --ntasks 8
 #SBATCH --mem=32G
 #SBATCH --mail-type=START,FAIL,END
@@ -40,12 +40,14 @@ sample="${samples_list[$idx]}"
 echo "Task $SLURM_ARRAY_TASK_ID processing sample: $sample"
 echo ${sample}_*.bam
 
+# Define output name
+out="${sample}_combnodupl_RG.bam"
+
 samtools merge -u - ${sample}_*.bam \
-    | samtools sort -@ 8 -o ${sample}.sorted.bam
+    | samtools sort -@ 8 -o "${out}"
 
-samtools index ${sample}.sorted.bam
+samtools index "${out}"
 
-### This is the end
+### This is the end.
 #################################################################################################################################
-
 
