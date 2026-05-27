@@ -1,0 +1,6 @@
+
+
+ls * _1.trim* > Files_name33.list
+sed -E 's/(.*)_1\.trim\.pair\.fq\.gz/\1/' Files_name33.list > Files_name3.list
+rm Files_name33.list
+mv Files_name3.list ../../../../
