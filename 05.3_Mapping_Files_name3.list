@@ -1,6 +1,105 @@
-
-
+## Next, we will do the mapping for Ina's samples from the study "".
+## We will create a new sample file list "Files_name3.list".
 ls * _1.trim* > Files_name33.list
 sed -E 's/(.*)_1\.trim\.pair\.fq\.gz/\1/' Files_name33.list > Files_name3.list
 rm Files_name33.list
 mv Files_name3.list ../../../../
+
+## "vim 5_mapping3.sh"
+
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J mapInaP1
+#SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/mapInaP1_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/05.BAM/logs/mapInaP1_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 24:00:00
+#SBATCH -p small
+#SBATCH --array=1-2 ## 3-71 change accordingly to samples
+#SBATCH --ntasks=8
+#SBATCH --mem=32G
+#SBATCH --mail-type=START,FAIL,END
+
+module load biokit
+module load r-env
+
+set -euo pipefail
+
+cd /scratch/project_2009316/EuSamples
+
+REFPATH=/scratch/project_2009316/rufaRefGenome       
+TRIMPATH=/scratch/project_2009316/EuSamples/04.TrimmedData/trimmed_patrick_k/semipermeable/trim
+TMPBAMPATH=/scratch/project_2009316/EuSamples/temp
+BAMPATH=/scratch/project_2009316/EuSamples/05.BAM
+
+## Files_name1.list
+file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" Files_name1.list)  #change accordingly "Files_name1.list"
+#shortfile=${file}
+
+echo "###### STARTING file: $file (sample: $shortfile)"
+
+# Define paths
+tmpbam="${TMPBAMPATH}/${shortfile}.bam.tmp"
+bam="${TMPBAMPATH}/${shortfile}.bam"
+nodupl="${BAMPATH}/nodupl/${shortfile}_nodupl_RG.bam"
+doneflag="${nodupl}.done"
+
+# Skip completed samples
+if [ -f "$doneflag" ] && samtools quickcheck "$nodupl"; then
+    echo "###### SKIPPING $shortfile (already done)"
+    exit 0
+fi
+
+###
+### 1. Map, sort, index, and add Read groups (-R)
+###
+echo "###### MAPPING"
+
+## Below, is the code for the new 2026 sequences and Files_name1.list
+bwa mem -t8 "${REFPATH}/Frufa_PR_May2026.fa" \
+    -R "@RG\tID:${shortfile}\tSM:${shortfile}\tPL:ILLUMINA\tLB:1\tPU:1" \
+    "${TRIMPATH}/${file}_1.trim.pair.fq.gz" \    
+    "${TRIMPATH}/${file}_2.trim.pair.fq.gz" \    
+    | samtools sort -@8 -m512M -o "$tmpbam"
+
+mv "$tmpbam" "$bam"
+samtools index -@4 "$bam"
+
+###
+### 2. Insert size
+###
+echo "###### INSERT SIZE"
+
+picard16 CollectInsertSizeMetrics \
+    I="$bam" \
+    O="${BAMPATH}/stats/${shortfile}_insert_size_metrics.txt" \
+    H="${BAMPATH}/stats/${shortfile}_insert_size_hist.pdf"
+
+###
+### 3. Mark and remove duplicates 
+###
+echo "###### MARK DUPLICATES"
+
+picard16 MarkDuplicates \
+    I="$bam" \
+    O="$nodupl" \
+    M="${BAMPATH}/nodupl/stats/${shortfile}_dupl_metrics.txt" \
+    REMOVE_DUPLICATES=true \
+    TMP_DIR="$TMPBAMPATH"
+
+###
+### 4. Index + stats
+###
+echo "###### FINAL STATS"
+
+samtools index -@4 "$nodupl"
+
+samtools flagstat -@4 "$nodupl" > "${BAMPATH}/nodupl/stats/${shortfile}_nodupl_RG.flagstat"
+samtools idxstats -@4 "$nodupl" > "${BAMPATH}/nodupl/stats/${shortfile}_nodupl_RG.idxstat"
+
+# Mark completion
+touch "$doneflag"
+
+echo "###### DONE $shortfile"
+
+#################################################################################################################################
