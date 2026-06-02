@@ -74,7 +74,7 @@ TMPBAMPATH=/scratch/project_2009316/EuSamples/temp
 BAMPATH=/scratch/project_2009316/EuSamples/05.BAM
 
 ## Files_name1.list
-file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" Files_name1.list)  #change accordingly "Files_name1.list"
+file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" Files_name3.list)  #change accordingly "Files_name1.list"
 #shortfile=${file}
 
 echo "###### STARTING file: $file (sample: $shortfile)"
