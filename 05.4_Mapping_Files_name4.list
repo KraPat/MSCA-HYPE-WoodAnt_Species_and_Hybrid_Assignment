@@ -32,7 +32,7 @@ tar -xf trim.tar
 #################################################################################################################################
 
 ## After having extracted the files, we will create a new sample file list "Files_name4.list". We move into the folder and list all files:
-ls * _1.trim* > Files_name44.list
+ls *_1.trim* > Files_name44.list
 sed -E 's/(.*)_1\.trim\.pair\.fq\.gz/\1/' Files_name44.list > Files_name4.list
 rm Files_name44.list
 mv Files_name4.list ../../../../
