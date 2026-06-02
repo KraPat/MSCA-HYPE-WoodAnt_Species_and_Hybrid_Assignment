@@ -103,8 +103,17 @@ samtools index -@4 "$nodupl"
 samtools flagstat -@4 "$nodupl" > "${BAMPATH}/nodupl/stats/${shortfile}_nodupl_RG.flagstat"
 samtools idxstats -@4 "$nodupl" > "${BAMPATH}/nodupl/stats/${shortfile}_nodupl_RG.idxstat"
 
-# Mark completion
-touch "$doneflag"
+# Check final BAM, mark completion and clean up temp BAMs
+if samtools quickcheck "$nodupl"; then
+    # Mark completion
+    touch "$doneflag"
+
+    echo "###### CLEANING UP TEMP FILES FOR $shortfile"
+    # Remove intermediate BAM and its index from the temp directory
+    rm -f "$bam" "${bam}.bai" "$tmpbam" "${tmpbam}.bai"
+else
+    echo "###### WARNING: $nodupl failed samtools quickcheck; not removing temp BAMs"
+fi
 
 echo "###### DONE $shortfile"
 
