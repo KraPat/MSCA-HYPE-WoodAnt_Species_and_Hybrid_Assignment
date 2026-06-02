@@ -1,12 +1,53 @@
 ## Next, we will do the mapping for Ina's samples from the study "".
-## We will create a new sample file list "Files_name3.list".
+## Ina send the data in a big tar-gzipped file, which we first needed access. For this we first checked the structure of the file:
+tar -tzf trimmed.tar.gz > trimmed_contents.txt
+## After checking what is inside (i.e., there are two different folders with the trimmed files from Ina), we select one folder at a time to extract it and map the files. For this, we noa create a bash-script for the cluster.
+
+## vim "4.1_untarIna.sh"
+
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J untar
+#SBATCH -o /scratch/project_2009316/EuSamples/04.TrimmedData/logs/untarIna_%j.out
+#SBATCH -e /scratch/project_2009316/EuSamples/04.TrimmedData/logs/untarIna_%j.err
+#SBATCH --account=project_2009316
+#SBATCH -t 12:00:00
+#SBATCH -p small
+#SBATCH --ntasks=8
+#SBATCH --mem=64G
+#SBATCH --mail-type=START,FAIL,END
+
+module load biokit
+set -euo pipefail
+
+cd /scratch/project_2009316/EuSamples/04.TrimmedData
+
+# 1. Extract only semipermeable from the big tar.gz
+tar -xzf trimmed.tar.gz 'trimmed_patrick_k/semipermeable/'
+
+cd trimmed_patrick_k/semipermeable
+
+# 2. Decompress and unpack inner tar
+unzstd trim.tar.zst          # or: zstd -d trim.tar.zst
+tar -xf trim.tar
+
+# 3. Run your mapping here, e.g. (example only!)
+# bwa mem -t 8 ref.fa sample_R1.fastq.gz sample_R2.fastq.gz | samtools sort -@ 8 -o sample.bam
+
+# 4. (Optional) Clean up to free space
+# rm -rf path/to/fastqs/if/no_longer_needed
+
+# END OF SCRIPT
+#################################################################################################################################
+
+## After having extracted the files, we will create a new sample file list "Files_name3.list". We move into the folder and list all files:
 ls * _1.trim* > Files_name33.list
 sed -E 's/(.*)_1\.trim\.pair\.fq\.gz/\1/' Files_name33.list > Files_name3.list
 rm Files_name33.list
 mv Files_name3.list ../../../../
 
 ## "vim 5_mapping3.sh"
-
+## With the following script, we do the mapping 
 #################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J mapInaP1
