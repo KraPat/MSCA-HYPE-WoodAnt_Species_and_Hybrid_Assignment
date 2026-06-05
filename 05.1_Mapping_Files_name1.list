@@ -6,8 +6,9 @@
 ## you can create them with, e.g.:
 ### mkdir 05.BAM
 ### mkdir 05.BAM/logs ...etc.
-## We will create new sample file lists "Files_name1.list", "Files_name2.list", "Files_name3.list" for the mapping.
-ls 04.TrimmedData/*1.trim.* > Files_name1.list.tmp #followed by
+## We will create new sample file lists "Files_name1.list", "Files_name2.list", "Files_name3.list" for the mapping. First, move into the directory
+cd 04.TrimmedData/
+ls *1.trim.* > Files_name1.list.tmp #followed by
 sed 's/_1\.fq\.gz$//' Files_name1.list.tmp > Files_name1.list
 #This lists all the 121 (actually 242 because R1 and R2) new samples sequenced in 2026
 
