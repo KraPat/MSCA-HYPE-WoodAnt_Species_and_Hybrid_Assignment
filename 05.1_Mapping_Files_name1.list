@@ -41,7 +41,7 @@ BAMPATH=/scratch/project_2009316/EuSamples/05.BAM
 
 ## Files_name1.list
 file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" Files_name1.list)  #change accordingly "Files_name1.list"
-#shortfile=${file}
+shortfile=${file}
 
 echo "###### STARTING file: $file (sample: $shortfile)"
 
@@ -65,8 +65,8 @@ echo "###### MAPPING"
 ## Below, is the code for the new 2026 sequences and Files_name1.list
 bwa mem -t8 "${REFPATH}/Frufa_PR_May2026.fa" \
     -R "@RG\tID:${shortfile}\tSM:${shortfile}\tPL:ILLUMINA\tLB:1\tPU:1" \
-    "${TRIMPATH}/${file}_1.trim.pair.fq.gz" \    
-    "${TRIMPATH}/${file}_2.trim.pair.fq.gz" \    
+    "${TRIMPATH}/${file}_1.trim.pair.fq.gz" \
+    "${TRIMPATH}/${file}_2.trim.pair.fq.gz" \
     | samtools sort -@8 -m512M -o "$tmpbam"
 
 mv "$tmpbam" "$bam"
