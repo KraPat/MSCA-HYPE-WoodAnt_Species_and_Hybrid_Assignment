@@ -34,7 +34,7 @@ BAMPATH=/scratch/project_2009316/EuSamples/05.BAM
 
 ## Files_name1.list
 file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" Files_name6.list)  #change accordingly "Files_name6.list"
-#shortfile=${file}
+shortfile=${file}
 
 echo "###### STARTING file: $file (sample: $shortfile)"
 
