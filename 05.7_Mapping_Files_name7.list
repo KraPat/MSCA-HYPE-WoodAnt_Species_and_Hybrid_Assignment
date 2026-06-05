@@ -37,7 +37,7 @@ BAMPATH=/scratch/project_2009316/EuSamples/05.BAM
 ## Files_name7.list
 # Get R1 filename (without path) from array file
 file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" Files_name7.list)
-#shortfile=${file}
+shortfile=${file}
 
 echo "###### STARTING file: $file (sample: $shortfile)"
 
