@@ -1,7 +1,9 @@
 ## NOTE, after mapping, filtering, duplicate removal, and merging BAM files, we now compute the sequencing depth per sample.
 ## The code calculates 10-kb windowed coverage for each BAM file, using 1 thread, excluding low-quality, secondary, or supplementary reads, outputting only summary and region coverage files.
 ## For this, we need to create a "nodupl_name.list". We could use a previous file but we will use a fewer samples because not all samples will be further used.
-## Create the file by "ls *bam > nodupl_name.list" and excluding the unnecessary files.
+## Create the file by
+ls *bam > nodupl_name.list 
+## and excluding the unnecessary files.
 ## We also need to create the subfolders "coverage" under /scratch/project_2009316/EuSamples/05.BAM/stats. Then we calculate the depth.
 
 #################################################################################################################################
