@@ -29,25 +29,32 @@ vim "7_ClipOverlap.sh"
 module load biokit
 export PATH="/projappl/project_2009316/myenv/bin:$PATH"
 
-# Define directories
+# move to directory
 cd /scratch/project_2009316/EuSamples/05.BAM/nodupl
+
+# Define directories
 INPUTDIR=/scratch/project_2009316/EuSamples/05.BAM/nodupl
 FINALDIR=/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 
+mkdir -p "$FINALDIR"
+
 # Get file & sample ID
-file=$(sed -n "$SLURM_ARRAY_TASK_ID"p input.list)
-sample=${file%_nodupl*}
+file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" nodupl_name.list)
+sample=${file%_nodupl_RG.bam}
 
 echo "### Processing $file"
+echo "### Sample ID: $sample"
 
 ###
 ### Clip overlaps
 ###
 
-# Reads are sorted by coordinates (see "samtools sort" command after mapping)
-bam clipOverlap --in "$INPUTDIR/$file" --out "$FINALDIR/${sample}_nodupl_wRG_clip.bam" --stats --params
-#NOTE: we add here "wRG" because read groups have been added in the previous mapping step, 05_Mapping
-
+# Reads are sorted by coordinates (as required by clipOverlap)
+bam clipOverlap \
+    --in  "$INPUTDIR/$file" \
+    --out "$FINALDIR/${sample}_nodupl_wRG_clip.bam" \
+    --stats \
+    --params
 
 ###
 ### Index
