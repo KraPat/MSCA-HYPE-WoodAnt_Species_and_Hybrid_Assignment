@@ -147,14 +147,14 @@ scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/stats/all.me
 ##############################################
 cd /scratch/project_2009316/EuSamples/05.BAM/nodupl/stats
 
-for i in *_nodupl.flagstat
+for i in *_nodupl_RG.flagstat
  do echo $i ; awk 'FNR == 7' $i
 done > all.mapping_rates.tmp
 ## Or a oneliner:
-#for i in *_nodupl.flagstat; do echo $i ; awk 'FNR == 7' $i; done > all.mapping_rates.tmp
+#for i in *_nodupl_RG.flagstat; do echo $i ; awk 'FNR == 7' $i; done > all.mapping_rates.tmp
 
 grep -v 'flagstat' all.mapping_rates.tmp > tmp1
-grep 'flagstat' all.mapping_rates.tmp | perl -npe 's/_nodupl.flagstat//' > tmp2
+grep 'flagstat' all.mapping_rates.tmp | perl -npe 's/_nodupl_RG.flagstat//' > tmp2
 paste tmp2 tmp1 > all.mapping_rates_RufaRef.txt ; rm *tmp*  #Rufa reference genome
 
 ##############################################
@@ -162,9 +162,9 @@ paste tmp2 tmp1 > all.mapping_rates_RufaRef.txt ; rm *tmp*  #Rufa reference geno
 scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/05.BAM/nodupl/stats/all.mapping_rates_RufaRef.txt .
 
 ####### NOTE: The output txt-file contains the mapping rates per sample, e.g.
-### sample H_627_A       11292839 + 0 mapped (99.05% : N/A)
-### It shows that the 99.050% of all reads in that BAM file have been aligned to the genome.
-### The remaining ~0.95% were unmapped, meaning they did not match the reference sufficiently (due to low quality, contamination, divergence, etc.).
-### Most of the samples were mapped with >90%, except for 4 samples that were between 80 and 90% and 1 sample with 75%
+### sample H_627_A      33502996 + 0 mapped (96.65% : N/A)
+### It shows that the 96.65% of all reads in that BAM file have been aligned to the genome.
+### The remaining ~3.35% were unmapped, meaning they did not match the reference sufficiently (due to low quality, contamination, divergence, etc.).
+### Most of the samples mapped with >90%, except for 4 samples that were between 80 and 90% and 1 sample with 75%
 
 #END
