@@ -41,3 +41,99 @@ tar -xavf Individual_files.tar.gz
 #-a --> automatically detecs the compression format and to decompress it
 #-v --> verbose -displays output
 #-f --> tells which tar exactly
+
+-----------------------------------------------------------------------------------------------
+## Most files are stored on ALLAS, while others need to be downloaded from NCBI.
+## Specifically there are several samples used 
+## Files_name1.list (First sampling and sequncing), Files_name2.list (Second sampling and sequencing), Files_name3.list (Ina semipermeable samples), Files_name4.list (Ina localPatterns samples), Files_name5.list (Ina paralugubris samples), Files_name6.list (17 Dutch samples), Files_name7.list (samples used for Adriana as templates), and Files_name8.list (InaXtra samples such as Att1, VDA, Jar6, etc.). I will also use specific files downloaded from NCBI from other studies.
+## Files_name1.list and Files_name2.list were downloaded from ALLAS - they were already trimmed.
+## Files_name3.list (Ina semipermeable samples), Files_name4.list (Ina localPatterns samples), and Files_name5.list (Ina paralugubris samples) were downloaded from ALLAs, but needed more treatment, but samples were already trimmed.
+## Files_name6.list (17 Dutch samples) and Files_name7.list (samples used for Adriana as templates) were already on the cluster.
+## Files_name8.list (InaXtra samples such as Att1, VDA, Jar6, etc.) needed to be downloaded from NCBI, detailed below. The same applies do the XtraSamples from wood ants. For simplicity, both are shown separately:
+
+## First, we create a screen, download the data using the URL and wget, 
+screen
+module load sratoolkit 
+## 1. Define your links in a space-separated list
+LINKS="https://sra-pub-run-odp.s3.amazonaws.com/sra/SRR15845271/SRR15845271
+https://sra-pub-run-odp.s3.amazonaws.com/sra/SRR15845547/SRR15845547
+https://sra-pub-run-odp.s3.amazonaws.com/sra/SRR15278649/SRR15278649
+https://sra-pub-run-odp.s3.amazonaws.com/sra/SRR12432375/SRR12432375 
+https://sra-pub-run-odp.s3.amazonaws.com/sra/SRR15845271/SRR15845271"
+
+# 2. Start the loop
+for URL in $LINKS; do # Extract the filename from the URL (the last part after the '/')
+FILENAME=$(basename $URL)
+
+echo "Starting download for $FILENAME..." 
+# Download the file and ensure it is saved as the Accession name
+wget -O "$FILENAME.sra" "$URL"
+
+echo "Extracting $FILENAME..." 
+# Run fasterq-dump on the newly downloaded file
+fasterq-dump "$FILENAME.sra" --threads 4 --progress
+
+# Optional: Remove the .sra file to save space after extraction
+# rm "$FILENAME.sra"
+
+done
+-----------------------------
+## Ina's additional files are found here:
+#https://www.ncbi.nlm.nih.gov/sra?linkname=bioproject_sra_all&from_uid=820256
+
+cd /scratch/project_2009316/EuSamples
+mkdir InaXtraSamples
+cd InaXtraSamples
+screen -S Download
+sinteractive
+module load sratoolkit 
+
+# 1. Define your links in a space-separated list
+LINKS="
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410614/ERR9410614
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410612/ERR9410612
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410610/ERR9410610
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410566/ERR9410566
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410564/ERR9410564
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410562/ERR9410562
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410561/ERR9410561
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410558/ERR9410558
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410556/ERR9410556
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410551/ERR9410551
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410463/ERR9410463
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410462/ERR9410462
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410461/ERR9410461
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410406/ERR9410406
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410405/ERR9410405
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410404/ERR9410404
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410366/ERR9410366
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410339/ERR9410339
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9410308/ERR9410308
+https://sra-pub-run-odp.s3.amazonaws.com/sra/ERR9409948/ERR9409948"
+
+
+# 2. Start the loop
+for URL in $LINKS; do # Extract the filename from the URL (the last part after the '/')
+FILENAME=$(basename $URL)
+
+echo "Starting download for $FILENAME..." 
+# Download the file and ensure it is saved as the Accession name
+wget -O "$FILENAME.sra" "$URL"
+
+echo "Extracting $FILENAME..." 
+# Run fasterq-dump on the newly downloaded file
+fasterq-dump "$FILENAME.sra" --threads 4 --progress
+
+# Optional: Remove the .sra file to save space after extraction
+# rm "$FILENAME.sra"
+
+done
+
+-------------------------------------------------------
+
+
+
+
+
+
+
