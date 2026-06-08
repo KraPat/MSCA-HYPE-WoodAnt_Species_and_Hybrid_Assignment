@@ -49,8 +49,10 @@ tar -xavf Individual_files.tar.gz
 ## Files_name1.list and Files_name2.list were downloaded from ALLAS - they were already trimmed.
 ## Files_name3.list (Ina semipermeable samples), Files_name4.list (Ina localPatterns samples), and Files_name5.list (Ina paralugubris samples) were downloaded from ALLAs, but needed more treatment, but samples were already trimmed.
 ## Files_name6.list (17 Dutch samples) and Files_name7.list (samples used for Adriana as templates) were already on the cluster.
-## Files_name8.list (InaXtra samples such as Att1, VDA, Jar6, etc.) needed to be downloaded from NCBI, detailed below. The same applies do the XtraSamples from wood ants. For simplicity, both are shown separately:
+## Files_name8.list (SRR fiels from NCBI) needed to be downloaded from NCBI, detailed below. The same applies do the XtraSamples from wood ants. For simplicity, both are shown separately:
+## Files_name9.list (InaXtra samples such as Att1, VDA, Jar6, etc.) needed to be downloaded from NCBI, detailed below. The same applies do the XtraSamples from wood ants. For simplicity, both are shown separately:
 
+### THIS is for Files_name8.list
 ## First, we create a screen, download the data using the URL and wget, 
 screen
 module load sratoolkit 
@@ -78,7 +80,7 @@ fasterq-dump "$FILENAME.sra" --threads 4 --progress
 
 done
 -----------------------------
-## Ina's additional files are found here:
+## Ina's additional files are found here, Files_name9.list
 #https://www.ncbi.nlm.nih.gov/sra?linkname=bioproject_sra_all&from_uid=820256
 
 cd /scratch/project_2009316/EuSamples
