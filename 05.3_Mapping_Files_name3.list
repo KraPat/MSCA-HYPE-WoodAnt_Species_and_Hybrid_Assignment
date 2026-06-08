@@ -3,7 +3,7 @@
 tar -tzf trimmed.tar.gz > trimmed_contents.txt
 ## After checking what is inside (i.e., there are two different folders with the trimmed files from Ina), we select one folder at a time to extract it and map the files. For this, we noa create a bash-script for the cluster.
 
-## vim "4.1_untarIna.sh"
+## vim "2.1_untarIna.sh"
 
 #################################################################################################################################
 #!/bin/bash -l
