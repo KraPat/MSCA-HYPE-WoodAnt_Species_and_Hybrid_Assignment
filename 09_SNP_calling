@@ -1,37 +1,43 @@
 ## Before, we run the SNP calling, we need to create a folder for the VCF file, "06.VCF" under /scratch/project_2009316/EuSamples/
-## Then, we need to split the refenrece genome in equal data size regions to speed up the analysis. See the software information: https://docs.csc.fi/apps/freebayes/. For this, we use the code below from the freebayes GitHub page, using sinteractive. 
+cd /scratch/project_2009316/EuSamples
+mkdir 06.VCF
+## Further, we need to split the reference genome in equal data size regions to speed up the analysis fro freebayes. For more information, see the software information: https://docs.csc.fi/apps/freebayes/.
+
+## We use the script "split_ref_by_bai_datasize.py" from the homepage. We copy-paste the script from https://github.com/freebayes/freebayes/blob/master/scripts/split_ref_by_bai_datasize.py into a python-script "split_ref_by_bai_datasize.py"
+vim split_ref_by_bai_datasize.py
+
+## After, copy-pasting the code, we change 'python3' into 'python' inside the script
+## Note: I have already downloaded the script and pasted it here as a script. Also also the script has run, so no need to do this now. It is here for the sake of completeness.
+
+## Further, we need an input list with all bam-files that should be used in splitting the reference genome and for the SNP calling.
+cd /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
+realpath *bam > all.bam.list
+## NOTE: Exclude files, for example, based on the BAM coverage:
+## 121, A_272a, A_286e, A_307, A_335b, H_445_A, and RN417. In total, there are 354 samples now.
+
+## Now, for splitting the reference genome, we use the code below from the freebayes GitHub page, using sinteractive. 
 
 ##############################################
 sinteractive --account project_2009316 --mem 2000
-cd /scratch/project_2009316/EuSamples/06.VCF
-nano split_ref_by_bai_datasize.py
-## NOW, copy-paste the code from https://github.com/freebayes/freebayes/blob/master/scripts/split_ref_by_bai_datasize.py and change 'python3' into 'python'
 module load biopythontools
-## Note: I have already downloaded the script and pasted it here as a script. Also also the script has run, so no need to do this now. It is here for the sake of completeness.
+
+cd /scratch/project_2009316/EuSamples/06.VCF
 
 python split_ref_by_bai_datasize.py \
 -L /scratch/project_2009316/EuSamples/05.BAM/bam_final/all.bam.list \
--r /scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis.fa.fai \
--s 5000000 > /scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis_5e6_data_regions.fa.fai
+-r /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa.fai \
+-s 5000000 > /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026_5e6_data_regions.fa.fai
 
 #modify regions file so that Freebayes accepts it
-cd /scratch/project_2009316/refGenome
-awk 'BEGIN{OFS=""} {print $1,":",$2,"-",$3}' Formica_hybrid_v1_wFhyb_Sapis_5e6_data_regions.fa.fai > Formica_hybrid_v1_5e6_data_regions.tmp
+cd /scratch/project_2009316/rufaRefGenome
+awk 'BEGIN{OFS=""} {print $1,":",$2,"-",$3}' Frufa_PR_May2026_5e6_data_regions.fa.fai > Frufa_PR_May2026_v1_5e6_data_regions.txt
 
-## Now, we remove regions that require different SNP calling parameters if they are needed: mitchondria (mtDNA), Wolbachia (wFhyb*), and Spiroplasma (Spiroplasma*), as well as Scaffold00, whcih is not a true scaffold but a fictional scaffold to which everything is mapped which is not correclted mapped in the genome or has unmapped reads (for cutting off SNP calling time since)
-
-cd /scratch/project_2009316/refGenome/
-
-#grep -v -e mtDNA -e wFhyb -e Spiroplasma Formica_hybrid_v1_50kb_regions.tmp > Formica_hybrid_v1_50kb_regions.txt ; rm Formica_hybrid_v1_50kb_regions.tmp
-grep -v -e mtDNA -e wFhyb -e Spiroplasma -e Scaffold00 Formica_hybrid_v1_5e6_data_regions.tmp > Formica_hybrid_v1_5e6_data_regions.txt ; rm Formica_hybrid_v1_5e6_data_regions.tmp
-#exit sinteractive
-
+exit sinteractive
 
 ######################################################################################
 ## Below, we start the SNP calling. We use "screen" to run in on a screen for 72 h, see https://linuxize.com/post/how-to-use-linux-screen/?utm_content=cmp-true
-## For this, we also need a bam list "all.bam.list" in the "bam_final" folder using
-#    realpath *bam > all.bam.list
-## We also need to calculate the "--skip-coverage"
+
+## We  need to calculate the "--skip-coverage"
 ## --skip-coverage = total DP combined across all samples; assuming max 400x per sample per region, 400X per sample * 38 samples = 15200X
 ## This will be set in the freebayes code below.
 ## An additional note on "--skip-coverage": a value of, e.g., "200" means that each region will be skipped that has a higher sum count of 200. You can also reduced this value by using this idea for --skip-coverage: "Number of samples" x "mean coverage across all samples" x 2
