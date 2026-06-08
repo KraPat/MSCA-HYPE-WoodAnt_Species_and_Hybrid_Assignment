@@ -73,5 +73,6 @@ paste tmp2 tmp1 > all.overlap_clip_ALL_correction_no03.mosdepth.summary.txt ; rm
 ## Note, a few files have a low coverage of 6, which we have to exclude. 
 ## These are: 121, A_272, A_286, A_307, A_335, H_445_A, and RN417. Further, we also need to exclude a secind H_445, because they are unmerged. The merged BAM file is fine.
 ## Others have a coverage of higher than 6-7, and most above 8
+## That is, in total, we have 362-8 = 354 samples.
 
 ##############################################
