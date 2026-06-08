@@ -5,7 +5,7 @@ ls *1.fq.gz > name.list1  #followed by
 sed 's/_1\.fq\.gz$//' name.list1 > XtraName.list
 rm name.list1
 
-## vim 4.2_InaXtra_trim.sh
+## vim 4.3_InaXtra_trim.sh
 
 #################################################################################################################################
 
