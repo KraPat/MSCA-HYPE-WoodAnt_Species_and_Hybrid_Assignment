@@ -1,7 +1,7 @@
 ## Similar as in 05.3_Mapping_Files_name3.list, we will do the mapping for Ina's other samples.
 ## Again, we will untar the files from the second folder now. We will use the same script as before but change a few things.
 
-## vim "4.2_untarIna.sh"
+## vim "2.2_untarIna.sh"
 
 #################################################################################################################################
 #!/bin/bash -l
