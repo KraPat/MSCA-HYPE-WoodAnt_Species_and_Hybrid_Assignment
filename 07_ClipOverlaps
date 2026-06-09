@@ -74,17 +74,16 @@ sinteractive --account project_2009316 --mem 8000
 module load biokit
 
 ### Check that the bam files are alright: -------
-## Unclipped ## -------
-/scratch/project_2009316/EuSamples/05.BAM/nodupl
-picard ValidateSamFile I=A_74a_EKDN240013500-1A_223FHVLT4_L7_nodupl_wRG.bam R=/scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis.fa MODE=SUMMARY
+## Clipped ## -------
+/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
+ValidateSamFile -I H_632_A_MKDN260003875-1A_23CL7MLT4_L3_nodupl_wRG_clip.bam -R /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa -MODE SUMMARY
+
+
 
 ## HISTOGRAM	java.lang.String
 #Error Type	Count
 #ERROR:INVALID_TAG_NM	26664
 
-## Clipped ## -------
-cd /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
-picard ValidateSamFile I=A_74a_EKDN240013500-1A_223FHVLT4_L7_nodupl_wRG_clip.bam R=/scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis.fa MODE=SUMMARY
 ##############################################
 ## HISTOGRAM	java.lang.String
 #Error Type	Count
