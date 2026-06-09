@@ -1,4 +1,4 @@
-## Lastly, we will do the mapping for a few files that have been stored on the cluster in a different folder but originate from the first sampling round. 
+## Now, we will do the mapping for a few files that have been stored on the cluster in a different folder but originate from the first sampling round. 
 ## We will now create new sample file list "Files_name7.list".
 ## This needs to be done inside the folder, 04.TrimmedData
 ls *_1.trim* > Files_name7.list.tmp 
