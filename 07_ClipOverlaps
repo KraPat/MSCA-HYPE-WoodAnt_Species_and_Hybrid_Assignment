@@ -90,7 +90,10 @@ picard ValidateSamFile -I NED_14a_EKDN240013620-1A_223LJKLT4_L3_nodupl_wRG_clip2
 ## Results:
 ### NED_14a
 NED_14a_EKDN240013620-1A_223LJKLT4_L3_nodupl_RG.bam 
-
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:INVALID_TAG_NM    1241
+ERROR:MATE_NOT_FOUND    16932
 
 NED_14a_EKDN240013620-1A_223LJKLT4_L3_nodupl_wRG_clip.bam 
 ## HISTOGRAM    java.lang.String
@@ -108,7 +111,10 @@ ERROR:MATE_NOT_FOUND    16932
 
 --
 NED_20a_EKDN240013621-1A_223LJKLT4_L6_nodupl_RG.bam
-
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:INVALID_TAG_NM    1386
+ERROR:MATE_NOT_FOUND    23957
 
 NED_20a_EKDN240013621-1A_223LJKLT4_L6_nodupl_wRG_clip.bam
 ## HISTOGRAM    java.lang.String
@@ -126,7 +132,10 @@ ERROR:MATE_NOT_FOUND    23957
 
 --
 s353_nodupl_RG.bam
-
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:INVALID_TAG_NM    615
+ERROR:MATE_NOT_FOUND    3465
 
 s353_nodupl_wRG_clip.bam
 ## HISTOGRAM    java.lang.String
@@ -144,11 +153,27 @@ ERROR:INVALID_INDEX_FILE_POINTER        1
 ERROR:MATE_NOT_FOUND    3465
 
 --
+s354_nodupl_RG.bam
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:INVALID_TAG_NM    697
+ERROR:MATE_NOT_FOUND    5151
 
+s354_nodupl_wRG_clip.bam
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:CIGAR_MAPS_OFF_REFERENCE  58
+ERROR:INVALID_CIGAR     401181
+ERROR:INVALID_TAG_NM    2688195
+ERROR:MATE_NOT_FOUND    5151
+ERROR:MISMATCH_MATE_CIGAR_STRING        7297749
 
+s354_nodupl_wRG_clip2.bam
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:MATE_NOT_FOUND    5151
 
-
-
+###
 
 
 
