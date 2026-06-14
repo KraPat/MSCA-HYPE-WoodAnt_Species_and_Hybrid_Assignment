@@ -69,25 +69,88 @@ samtools index "$FINALDIR/${sample}_nodupl_wRG_clip.bam"
 
 ##############################################
 ## Below, we will work on the cluster using sinteractive to assess whether the BAM files are correct.
-## In the next step, we will calculate the BAM coverage after clipping.
+## In the next step, we will check the BAM integrity after clipping overlaps using sinteractive
+#We do this for 4 samples, NED14, NED20, S353, s354
 sinteractive --account project_2009316 --mem 8000
 module load biokit
 
-### Check that the bam files are alright: -------
+## Unclipped
+/scratch/project_2009316/EuSamples/05.BAM/nodupl
+picard ValidateSamFile -I NED_14a_EKDN240013620-1A_223LJKLT4_L3_nodupl_RG.bam -R /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa -MODE SUMMARY
+
 ## Clipped ## -------
+## Note, we clipped with bamUtil ClipBam or fgBio BamClip
+## The former is known to introduce errors in the cigars; the latter not. Let's check this!
+
 /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
-ValidateSamFile -I H_632_A_MKDN260003875-1A_23CL7MLT4_L3_nodupl_wRG_clip.bam -R /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa -MODE SUMMARY
+picard ValidateSamFile -I NED_14a_EKDN240013620-1A_223LJKLT4_L3_nodupl_wRG_clip.bam -R /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa -MODE SUMMARY
+
+picard ValidateSamFile -I NED_14a_EKDN240013620-1A_223LJKLT4_L3_nodupl_wRG_clip2.bam -R /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa -MODE SUMMARY
+
+## Results:
+### NED_14a
+NED_14a_EKDN240013620-1A_223LJKLT4_L3_nodupl_RG.bam 
+
+
+NED_14a_EKDN240013620-1A_223LJKLT4_L3_nodupl_wRG_clip.bam 
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:CIGAR_MAPS_OFF_REFERENCE  58
+ERROR:INVALID_CIGAR     640779
+ERROR:INVALID_TAG_NM    2093032
+ERROR:MATE_NOT_FOUND    16932
+ERROR:MISMATCH_MATE_CIGAR_STRING        6347972
+
+NED_14a_EKDN240013620-1A_223LJKLT4_L3_nodupl_wRG_clip2.bam 
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:MATE_NOT_FOUND    16932
+
+--
+NED_20a_EKDN240013621-1A_223LJKLT4_L6_nodupl_RG.bam
+
+
+NED_20a_EKDN240013621-1A_223LJKLT4_L6_nodupl_wRG_clip.bam
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:CIGAR_MAPS_OFF_REFERENCE  81
+ERROR:INVALID_CIGAR     843593
+ERROR:INVALID_TAG_NM    2859102
+ERROR:MATE_NOT_FOUND    23957
+ERROR:MISMATCH_MATE_CIGAR_STRING        8061151
+
+NED_20a_EKDN240013621-1A_223LJKLT4_L6_nodupl_wRG_clip2.bam
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:MATE_NOT_FOUND    23957
+
+--
+s353_nodupl_RG.bam
+
+
+s353_nodupl_wRG_clip.bam
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:CIGAR_MAPS_OFF_REFERENCE  64
+ERROR:INVALID_CIGAR     361777
+ERROR:INVALID_TAG_NM    3081304
+ERROR:MATE_NOT_FOUND    3465
+ERROR:MISMATCH_MATE_CIGAR_STRING        7479436
+
+s353_nodupl_wRG_clip2.bam
+## HISTOGRAM    java.lang.String
+Error Type      Count
+ERROR:INVALID_INDEX_FILE_POINTER        1
+ERROR:MATE_NOT_FOUND    3465
+
+--
 
 
 
-## HISTOGRAM	java.lang.String
-#Error Type	Count
-#ERROR:INVALID_TAG_NM	26664
 
-##############################################
-## HISTOGRAM	java.lang.String
-#Error Type	Count
-#ERROR:CIGAR_MAPS_OFF_REFERENCE	655
-#ERROR:INVALID_CIGAR	1055424
-#ERROR:INVALID_TAG_NM	5704471
-#ERROR:MISMATCH_MATE_CIGAR_STRING	12683598
+
+
+
+
+
+
