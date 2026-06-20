@@ -62,18 +62,29 @@ sinteractive --account project_2009316 --mem 8000  # requests an interactive job
 
 cd /scratch/project_2009316/EuSamples/05.BAM/stats/coverage
 
-for i in *overlap_clip_correction.mosdepth.summary.txt; do echo $i; grep 'chromosome' "$i" | awk '{sum+=$4} END{print sum/NR}'; done > all.overlap_clip_ALL_correction.mosdepth.summary.tmp
+#Select all data
+for i in *.mosdepth.summary.txt; do echo $i; grep 'chromosome' "$i" | awk '{sum+=$4} END{print sum/NR}'; done > all.overlap_clip_ALL_correction.mosdepth.summary.tmp
 
 grep -v 'txt' all.overlap_clip_ALL_correction.mosdepth.summary.tmp > tmp1
 grep 'txt' all.overlap_clip_ALL_correction.mosdepth.summary.tmp | perl -npe 's/_overlap_clip_ALL_correction.mosdepth.summary.txt//' > tmp2
 paste tmp2 tmp1 > all.overlap_clip_ALL_correction.mosdepth.summary.txt ; rm *tmp*
 
+#Only overlap-corrected data
+for i in *_overlap_correction.mosdepth.summary.txt; do echo $i; grep 'chromosome' "$i" | awk '{sum+=$4} END{print sum/NR}'; done > all.overlap_corrected_ALL_correction.mosdepth.summary.tmp
+
+grep -v 'txt' all.overlap_corrected_ALL_correction.mosdepth.summary.tmp > tmp1
+grep 'txt' all.overlap_corrected_ALL_correction.mosdepth.summary.tmp | perl -npe 's/overlap_corrected_ALL_correction.mosdepth.summary.txt//' > tmp2
+paste tmp2 tmp1 > all.overlap_corrected_ALL_correction.mosdepth.summary.txt ; rm *tmp*
+
+
+
 ## NOW, we do the same but exclude chromosome 03 (social chromosome), the "regions", and CAXYF-regions:
-for i in *overlap_clip_correction.mosdepth.summary.txt; do echo $i; grep 'chromosome' $i | grep -v 'region' | grep -v 'chromosome_3' | grep -v 'CAXYFX010' | awk '{sum+=$4;} END{print sum/NR;}'; done > all.overlap_clip_ALL_correction_no03.mosdepth.summary.tmp
+for i in *.mosdepth.summary.txt; do echo $i; grep 'chromosome' $i | grep -v 'region' | grep -v 'chromosome_3' | grep -v 'CAXYFX010' | awk '{sum+=$4;} END{print sum/NR;}'; done > all.overlap_clip_ALL_correction_no03.mosdepth.summary.tmp
 
 grep -v 'txt' all.overlap_clip_ALL_correction_no03.mosdepth.summary.tmp > tmp1
 grep 'txt' all.overlap_clip_ALL_correction_no03.mosdepth.summary.tmp | perl -npe 's/_overlap_correction_no03.mosdepth.summary.txt//' > tmp2
 paste tmp2 tmp1 > all.overlap_clip_ALL_correction_no03.mosdepth.summary.txt ; rm *tmp*
+
 
 ##############################################
 ## Now, we download the files to our local machine
