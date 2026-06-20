@@ -60,7 +60,7 @@ sinteractive --account project_2009316 --mem 8000
 ### Get coverage for overlap corrected data  --------------------
 
 cd /scratch/project_2009316/EuSamples/05.BAM/stats/coverage
-rm -rf *global*
+#rm -rf *global*
 
 for i in *overlap_correction.mosdepth.summary.txt; do echo $i; grep 'Scaffold' "$i" | awk '{sum+=$4} END{print sum/NR}'; done > all.overlap_correction.mosdepth.summary.tmp
 
