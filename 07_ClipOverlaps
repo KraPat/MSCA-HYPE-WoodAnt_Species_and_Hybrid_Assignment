@@ -1,74 +1,93 @@
 ## In this section, we clip the overlaps, which have the same physical DNA bases in the middle.
 ## Such overlaps can inflate coverage, depth, and lead to false SNPs or heterozygostiy.
-## We thus need to exclude them.
+## We thus need to remove them. While initially this was done with bam ClipOverlap, this functions introduces various problems in the cigars.
+## Instead, we now use fgBio BamClip.
 
 ## First, we create the input file list
 cd /scratch/project_2009316/EuSamples/05.BAM/nodupl
 ls *bam | sort -nk1,1 > input.list ; cd .. #sort numeric, according to position 1,1
-
-# Then, we create the output folder
-mkdir /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 
 #and the Script 
 vim "7_ClipOverlap.sh"
 
 #################################################################################################################################
 #!/bin/bash -l
-#SBATCH -J clipOverlap
-#SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/clipOverlap_%j.out
-#SBATCH -e /scratch/project_2009316/EuSamples/05.BAM/logs/clipOverlap_%j.err
+#SBATCH -J clipOverlapFGbio
+#SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/clipOverFG_%j.out
+#SBATCH -e /scratch/project_2009316/EuSamples/05.BAM/logs/clipOverFG_%j.err
 #SBATCH --account=project_2009316
-#SBATCH -t 04:00:00
+#SBATCH -t 08:00:00
 #SBATCH -p small
 #SBATCH --array=1-2 ##change to number of samples
 #SBATCH --ntasks 1
-#SBATCH --mem-per-cpu=4GB
+#SBATCH --mem-per-cpu=32GB
 #SBATCH --mail-type=BEGIN,END,FAIL
 
 # Load modules
 module load biokit
 export PATH="/projappl/project_2009316/myenv/bin:$PATH"
 
-# move to directory
+# Move to directory
 cd /scratch/project_2009316/EuSamples/05.BAM/nodupl
 
 # Define directories
 INPUTDIR=/scratch/project_2009316/EuSamples/05.BAM/nodupl
 FINALDIR=/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 
+# Make sure FINALDIR exists
 mkdir -p "$FINALDIR"
 
 # Get file & sample ID
-file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" nodupl_name.list)
-sample=${file%_nodupl_RG.bam}
+file=$(sed -n "${SLURM_ARRAY_TASK_ID}p" clip.ALL.list) #clip.listNEW) # we now clipt 10 samples with fgbio and compare fgbio-clipped samples with bamUtils clipped samples
+sample=${file%_nodupl*}
+
+out_bam="$FINALDIR/${sample}_nodupl_wRG_clip2.bam"
+out_bai="$out_bam.bai"
+
 
 echo "### Processing $file"
 echo "### Sample ID: $sample"
 
 ###
+### Skip if already done
+###
+if [[ -s "$out_bam" && -s "$out_bai" ]]; then
+    echo "### Output already exists (and is non-empty):"
+    echo "###   $out_bam"
+    echo "###   $out_bai"
+    echo "### Skipping..."
+    exit 0
+fi
+
+###
 ### Clip overlaps
 ###
 
-# Reads are sorted by coordinates (as required by clipOverlap)
-bam clipOverlap \
-    --in  "$INPUTDIR/$file" \
-    --out "$FINALDIR/${sample}_nodupl_wRG_clip.bam" \
-    --stats \
-    --params
+# Reads are sorted by coordinates (see "samtools sort" command after mapping)
+#bam clipOverlap --in "$INPUTDIR/$file" --out "$FINALDIR/${sample}_nodupl_wRG_clip.bam" --stats --params
+samtools sort -n -u -@ 4 "$INPUTDIR/$file" | \
+fgbio ClipBam \
+    -i /dev/stdin \
+    -o /dev/stdout \
+    -r "/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa" \
+    --clip-overlapping-reads true \
+| samtools sort -@ 4 -o "$out_bam"
+
 
 ###
 ### Index
 ###
 
-samtools index "$FINALDIR/${sample}_nodupl_wRG_clip.bam"
+samtools index "$out_bam"
 
 ### END OF THE SCRIPT
+
 
 #################################################################################################################################
 
 
 ##############################################
-## Below, we will work on the cluster using sinteractive to assess whether the BAM files are correct.
+## Below, we will compare the fgBio and BamUtils outputs by working on the cluster using sinteractive to assess whether the BAM files are correct.
 ## In the next step, we will check the BAM integrity after clipping overlaps using sinteractive
 #We do this for 4 samples, NED14, NED20, S353, s354
 sinteractive --account project_2009316 --mem 8000
