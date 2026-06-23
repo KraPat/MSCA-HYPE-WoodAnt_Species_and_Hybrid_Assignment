@@ -54,8 +54,6 @@ mosdepth -t 1 -b 10000 -n ../stats/coverage/"${sample}_overlap_correction" \
 
 
 ## Now, we will calculate the coverage locally on the cluster using sinteractive. 
-
-##############################################
 ##############################################
 sinteractive --account project_2009316 --mem 8000  # requests an interactive job on a compute node
 ### Get coverage for overlap corrected data  --------------------
@@ -75,7 +73,6 @@ for i in *_overlap_correction.mosdepth.summary.txt; do echo $i; grep 'chromosome
 grep -v 'txt' all.overlap_corrected_ALL_correction.mosdepth.summary.tmp > tmp1
 grep 'txt' all.overlap_corrected_ALL_correction.mosdepth.summary.tmp | perl -npe 's/overlap_corrected_ALL_correction.mosdepth.summary.txt//' > tmp2
 paste tmp2 tmp1 > all.overlap_corrected_ALL_correction.mosdepth.summary.txt ; rm *tmp*
-
 
 
 ## NOW, we do the same but exclude chromosome 03 (social chromosome), the "regions", and CAXYF-regions:
