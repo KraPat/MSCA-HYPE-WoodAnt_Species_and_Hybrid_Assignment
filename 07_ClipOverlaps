@@ -85,6 +85,16 @@ samtools index "$out_bam"
 
 #################################################################################################################################
 
+## We can use samtools quickcheck to check if the BAM files seem okay. 
+## From the samtools manual (https://www.htslib.org/doc/1.16/samtools-quickcheck.html):
+## Checks that beginning of the file contains a valid header (all formats) containing at least one target sequence and then seeks to the end of the file and checks that an end-of-file (EOF) is present and intact (BAM and CRAM only). 
+##############################################
+sinteractive --account project_2009316 --mem 8000
+cd /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
+module load biokit
+samtools quickcheck -v *_nodupl_wRG_clip2.bam 2>bad_bams.txt
+cat bad_bams.txt
+## bad_bams.txt will contain any BAMs that look corrupted. If empty, all files look good!
 
 ##############################################
 ## Below, we will compare the fgBio and BamUtils outputs by working on the cluster using sinteractive to assess whether the BAM files are correct.
