@@ -13,7 +13,7 @@ vim split_ref_by_bai_datasize.py
 cd /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 realpath *bam > all.bam.list
 ## NOTE: We have to exclude some files based on a low BAM coverage, namely:
-## 121, A_272a, A_286e, A_307, A_335b, H_445_A, and RN417. In total, there are 354 samples now.
+## 121, A_272a, A_286e, A_307, A_335b, H_445_A, and RN417. In total, there are ####XX samples now.
 ## Remove them from the all.bam.list
 
 ## Now, for splitting the reference genome, we use the code below from the freebayes GitHub page, using sinteractive. 
@@ -39,7 +39,8 @@ exit sinteractive
 ## Below, we start the SNP calling. We use "screen" to run in on a screen for 72 h, see https://linuxize.com/post/how-to-use-linux-screen/?utm_content=cmp-true
 
 ## We  need to calculate the "--skip-coverage"
-## --skip-coverage = total DP combined across all samples; assuming max 400x per sample per region, 400X per sample * 38 samples = 15200X
+## --skip-coverage = total DP combined across all samples; assuming max 400x per sample per region, 400X per sample * 385 samples = 154,000
+## However, with "--limit-coverage 100", the effective max total DP is actually 100 × 385 = 38,500, so --skip-coverage 57750 will almost never trigger in practice. So we could decrease it to 57750.
 ## This will be set in the freebayes code below.
 ## An additional note on "--skip-coverage": a value of, e.g., "200" means that each region will be skipped that has a higher sum count of 200. You can also reduced this value by using this idea for --skip-coverage: "Number of samples" x "mean coverage across all samples" x 2
 ## We also need a folder "raw" under the bam_final folder
