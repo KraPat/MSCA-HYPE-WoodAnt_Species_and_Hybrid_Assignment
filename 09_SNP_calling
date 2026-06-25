@@ -26,13 +26,17 @@ module load biopythontools
 cd /scratch/project_2009316/EuSamples/06.VCF
 
 python split_ref_by_bai_datasize.py \
--L /scratch/project_2009316/EuSamples/05.BAM/bam_final/all.bam.list \
+-L /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip/all.bam.list \
 -r /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa.fai \
--s 5000000 > /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026_5e6_data_regions.fa.fai
+-s 2000000 > /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026_2e6_data_regions.fa.fai
+## onliner
+# python split_ref_by_bai_datasize.py -L /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip/all.bam.list -r /scratch/project_2009316/rufaRefG
+enome/Frufa_PR_May2026.fa.fai -s 2000000 > /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026_2e6_data_regions.fa.fai
+
 
 #modify regions file so that Freebayes accepts it
 cd /scratch/project_2009316/rufaRefGenome
-awk 'BEGIN{OFS=""} {print $1,":",$2,"-",$3}' Frufa_PR_May2026_5e6_data_regions.fa.fai > Frufa_PR_May2026_v1_5e6_data_regions.txt
+awk 'BEGIN{OFS=""} {print $1,":",$2,"-",$3}' Frufa_PR_May2026_2e6_data_regions.fa.fai > Frufa_PR_May2026_v1_2e6_data_regions.txt
 
 exit sinteractive
 
@@ -41,7 +45,8 @@ exit sinteractive
 
 ## We  need to calculate the "--skip-coverage"
 ## --skip-coverage = total DP combined across all samples; assuming max 400x per sample per region, 400X per sample * 385 samples = 154,000
-## However, with "--limit-coverage 100", the effective max total DP is actually 100 × 385 = 38,500, so --skip-coverage 57750 will almost never trigger in practice. So we could decrease it to 57750.
+## However, with "--limit-coverage 100", the effective max total DP is actually 100 × 385 = 38,500, so --skip-coverage 57750 will almost never trigger in practice. If --limit-coverage 100 is, a more meaningful value would be: 100×385×1.5 ≈ 57,750!
+## The 1.5× buffer accounts for any sampling variance. 
 ## This will be set in the freebayes code below.
 ## An additional note on "--skip-coverage": a value of, e.g., "200" means that each region will be skipped that has a higher sum count of 200. You can also reduced this value by using this idea for --skip-coverage: "Number of samples" x "mean coverage across all samples" x 2
 ## We also need a folder "raw" under the bam_final folder
@@ -58,22 +63,22 @@ module load freebayes # version used in 2023: v1.3.6
 cd /scratch/project_2009316/EuSamples/06.VCF
 REF=/scratch/project_2009316/refGenome
 RES=/scratch/project_2009316/EuSamples/06.VCF
-BAM=/scratch/project_2009316/EuSamples/05.BAM/bam_final
+BAM=/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 
 # screen have issues with code on many lines, so instead of backslashes use code on one line
 # freebayes-puhti \
 #  -time 72 \
 #  -mem 64 \
-#  -regions $REF/Formica_hybrid_v1_5e6_data_regions.txt \
-#  -f $REF/Formica_hybrid_v1_wFhyb_Sapis.fa \
+#  -regions $REF/Frufa_PR_May2026_v1_2e6_data_regions.txt \
+#  -f $REF/Frufa_PR_May2026.fa \
 #  -L $BAM/all.bam.list \
-#  -k --genotype-qualities --skip-coverage 15200 \
+#  -k --genotype-qualities --skip-coverage 57750 \
 #  --limit-coverage 100 \ 
 #  --use-best-n-alleles 3 \
-#  -out $RES/raw/all_samples_raw.vcf
+#  -out $RES/all_samples_raw.vcf
 
 
-freebayes-puhti -time 72 -mem 64 -regions $REF/Formica_hybrid_v1_5e6_data_regions.txt -f $REF/Formica_hybrid_v1_wFhyb_Sapis.fa -L $BAM/all.bam.list -k --genotype-qualities --skip-coverage 15200 --limit-coverage 100 --use-best-n-alleles 3 -out $RES/raw/all_samples_raw.vcf
+freebayes-puhti -time 72 -mem 64 -regions $REF/Frufa_PR_May2026_v1_2e6_data_regions.txt -f $REF/Frufa_PR_May2026.fa -L $BAM/all.bam.list -k --genotype-qualities --skip-coverage 57750 --limit-coverage 100 --use-best-n-alleles 3 -out $RES/all_samples_raw.vcf
 
 
 # max mean depth as per 'vcftools --depth' was 46x for sample 108-Flug. Later on all sites that have 2x per ind mean depth are anyway set as '.', which is why limiting to 100x with '--limit-coverage' is safe.
