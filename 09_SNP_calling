@@ -13,7 +13,8 @@ vim split_ref_by_bai_datasize.py
 cd /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 realpath *bam > all.bam.list
 ## NOTE: We have to exclude some files based on a low BAM coverage, namely:
-## 121, A_272a, A_286e, A_307, A_335b, H_445_A, and RN417. In total, there are ####XX samples now.
+## 121_S160, A_272a, A_286e, A_307b, A_335b, Fprat_SRR15278649, RN417.
+## In total, there are 385 samples now.
 ## Remove them from the all.bam.list
 
 ## Now, for splitting the reference genome, we use the code below from the freebayes GitHub page, using sinteractive. 
