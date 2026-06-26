@@ -10,12 +10,12 @@ vim split_ref_by_bai_datasize.py
 ## Note: I have already downloaded the script and pasted it here as a script. Also also the script has run, so no need to do this now. It is here for the sake of completeness.
 
 ## Further, we need an input list with all bam-files that should be used in splitting the reference genome and for the SNP calling.
-cd /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
+#cd /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
+cd /scratch/project_2009316/EuSamples/05.BAM/BAM_final
 realpath *bam > all.bam.list
 ## NOTE: We have to exclude some files based on a low BAM coverage, namely:
 ## 121_S160, A_272a, A_286e, A_307b, A_335b, Fprat_SRR15278649, RN417.
 ## In total, there are 385 samples now.
-## Remove them from the all.bam.list
 
 ## Now, for splitting the reference genome, we use the code below from the freebayes GitHub page, using sinteractive. 
 
@@ -30,9 +30,8 @@ python split_ref_by_bai_datasize.py \
 -r /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa.fai \
 -s 2000000 > /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026_2e6_data_regions.fa.fai
 ## onliner
-# python split_ref_by_bai_datasize.py -L /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip/all.bam.list -r /scratch/project_2009316/rufaRefG
-enome/Frufa_PR_May2026.fa.fai -s 2000000 > /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026_2e6_data_regions.fa.fai
-
+# python split_ref_by_bai_datasize.py -L /scratch/project_2009316/EuSamples/05.BAM/nodupl_clip/all.bam.list -r /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa.fai -s 2000000 > /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026_2e6_data_regions.fa.fai
+# python split_ref_by_bai_datasize.py -L /scratch/project_2009316/EuSamples/05.BAM/BAM_final/all.bam.list -r /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa.fai -s 2000000 > /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026_2e6_data_regions.fa.fai
 
 #modify regions file so that Freebayes accepts it
 cd /scratch/project_2009316/rufaRefGenome
@@ -63,7 +62,8 @@ module load freebayes # version used in 2023: v1.3.6
 cd /scratch/project_2009316/EuSamples/06.VCF
 REF=/scratch/project_2009316/refGenome
 RES=/scratch/project_2009316/EuSamples/06.VCF
-BAM=/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
+#BAM=/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
+BAM=/scratch/project_2009316/EuSamples/05.BAM/BAM_final
 
 # screen have issues with code on many lines, so instead of backslashes use code on one line
 # freebayes-puhti \
@@ -79,6 +79,7 @@ BAM=/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip
 
 
 freebayes-puhti -time 72 -mem 64 -regions $REF/Frufa_PR_May2026_v1_2e6_data_regions.txt -f $REF/Frufa_PR_May2026.fa -L $BAM/all.bam.list -k --genotype-qualities --skip-coverage 57750 --limit-coverage 100 --use-best-n-alleles 3 -out $RES/all_samples_raw.vcf
+freebayes-puhti -time 72 -mem 64 -regions $REF/Frufa_PR_May2026_v1_2e6_data_regions.txt -f $REF/Frufa_PR_May2026.fa -L $BAM/all.bam.list -k --genotype-qualities --skip-coverage 57750 --limit-coverage 100 --use-best-n-alleles 3 -out $RES/raw/all_samples_raw.vcf
 
 
 # max mean depth as per 'vcftools --depth' was 46x for sample 108-Flug. Later on all sites that have 2x per ind mean depth are anyway set as '.', which is why limiting to 100x with '--limit-coverage' is safe.
