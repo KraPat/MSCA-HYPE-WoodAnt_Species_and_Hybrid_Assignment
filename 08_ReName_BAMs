@@ -83,7 +83,7 @@ echo "All done."
 After doing this, I realised that not all RG (tags inside the BAM files) had been changed causing errors during SNP calling.
 ## To solve this, I re-headered all samples usng a different script:
 
-"8.2_ReHeaderBAM.sh"
+"8.1_ReHeaderBAM.sh"
 #################################################################################################################################
 #!/bin/bash
 #SBATCH -J ReHeaderBAM
