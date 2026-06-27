@@ -1,0 +1,134 @@
+## Before SNP calling, we will rename (and reheader) all BAM files and ID and RG tags within the BAM files.
+## For this, we need to create a file "rename_samples.txt" with two columns. In the first file, we have the previous file name and in the second, the new one, e.g.:
+old_bam_name    new_bam_name
+102_S145_L004_nodupl_wRG_clip2.bam      102_Frufa_FI_nodupl_wRG_clip2.bam
+103_S130_L004_nodupl_wRG_clip2.bam      103_Faqui_FI_nodupl_wRG_clip2.bam
+104_S146_L004_nodupl_wRG_clip2.bam      104_Faqui_FI_nodupl_wRG_clip2.bam
+
+"8_RenameBAM.sh"
+#################################################################################################################################
+!/bin/bash
+#SBATCH -J RenameBAM
+#SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/RenameBAM_%j.out
+#SBATCH -e /scratch/project_2009316/EuSamples/05.BAM/logs/RenameBAM_%j.err
+#SBATCH --account=project_2009316
+#SBATCH -t 04:00:00
+#SBATCH -p small
+#SBATCH --array=1 ##change to number of samples
+#SBATCH --ntasks 4
+#SBATCH --mem-per-cpu=8GB
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+module load biokit
+
+# Rename BAM files and update their @RG SM/ID tags in the header
+# Usage: bash rename_bam_headers.sh
+# Requires: samtools
+
+BAMDIR="/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip"     # directory containing BAM files
+MAP="rename_bams.tsv"              # tab-separated: old_bam <tab> new_bam
+THREADS=4
+
+# Skip header line
+tail -n +2 "$MAP" | while IFS=$'\t' read -r OLD_BAM_NAME NEW_BAM_NAME; do
+
+    OLD_BAM="$BAMDIR/$OLD_BAM_NAME"
+    NEW_BAM="$BAMDIR/$NEW_BAM_NAME"
+    TMP_BAM="${NEW_BAM}.tmp"
+
+    if [[ ! -f "$OLD_BAM" ]]; then
+        echo "WARNING: $OLD_BAM not found, skipping."
+        continue
+    fi
+
+    # What you want for ID and SM (no .bam for SM if you prefer)
+    NEW_ID=$(basename "$NEW_BAM")          # e.g. Th1_Fprat_NL_nodupl_wRG_clip2.bam
+    NEW_SM="${NEW_ID%.bam}"                # e.g. Th1_Fprat_NL_nodupl_wRG_clip2
+
+    echo "Processing:"
+    echo "  File : $OLD_BAM_NAME → $NEW_BAM_NAME"
+    echo "  ID   : $NEW_ID"
+    echo "  SM   : $NEW_SM"
+
+    # Rewrite ID and SM in @RG lines
+    samtools view -H "$OLD_BAM" \
+      | sed -E "s/(ID:)[^[:space:]]+/\1$NEW_ID/g" \
+      | sed -E "s/(SM:)[^[:space:]]+/\1$NEW_SM/g" \
+      | samtools reheader - "$OLD_BAM" > "$TMP_BAM"
+
+    if [[ -s "$TMP_BAM" ]]; then
+        # Move tmp to final name (this both updates header and renames the file)
+        mv "$TMP_BAM" "$NEW_BAM"
+
+        # Index new BAM
+        samtools index -@ "$THREADS" "$NEW_BAM"
+
+        # Remove old BAM + index (if name changed)
+        if [[ "$OLD_BAM" != "$NEW_BAM" ]]; then
+            rm -f "$OLD_BAM" "${OLD_BAM}.bai" "${OLD_BAM%.bam}.bai"
+        fi
+
+        echo "  Done."
+    else
+        echo "  ERROR: empty tmp file for $OLD_BAM_NAME, keeping original."
+        rm -f "$TMP_BAM"
+    fi
+
+done
+
+echo "All done."
+#################################################################################################################################
+
+After doing this, I realised that not all RG (tags inside the BAM files) had been changed causing errors during SNP calling.
+## To solve this, I re-headered all samples usng a different script:
+
+"8.2_ReHeaderBAM.sh"
+#################################################################################################################################
+#!/bin/bash
+#SBATCH -J ReHeaderBAM
+#SBATCH -o /scratch/project_2009316/EuSamples/05.BAM/logs/ReHeaderBAM_%j.out
+#SBATCH -e /scratch/project_2009316/EuSamples/05.BAM/logs/ReHeaderBAM_%j.err
+#SBATCH --account=project_2009316
+#SBATCH -t 04:00:00
+#SBATCH -p small
+#SBATCH --array=301-385  #385 ##change to number of samples
+#SBATCH --ntasks 4
+#SBATCH --mem-per-cpu=8GB
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+module load biokit
+
+# Rename BAM files and update their @RG SM/ID tags in the header
+# Usage: bash rename_bam_headers.sh
+# Requires: samtools
+
+#BAM_DIR="/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip"     # directory containing BAM files
+BAM_LIST=/scratch/project_2009316/EuSamples/05.BAM/nodupl_clip/all.bam.list
+OUT_DIR="/scratch/project_2009316/EuSamples/05.BAM/BAM_final"
+
+mkdir -p "$OUT_DIR"
+
+# Pick BAM for this array index
+bam=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$BAM_LIST")
+base=$(basename "$bam" .bam)
+out="$OUT_DIR/${base}.rgfixed.bam"
+
+echo "[$(date)] Task $SLURM_ARRAY_TASK_ID processing: $bam"
+echo "Output: $out"
+
+CPUS=${SLURM_CPUS_PER_TASK:-4}
+
+samtools addreplacerg \
+  -r "ID:${base}\tSM:${base}\tPL:ILLUMINA\tLB:1\tPU:1" \
+  -@ "$CPUS" \
+  -o "$out" \
+  "$bam"
+
+samtools index "$out"
+
+echo "[$(date)] Done: $out"
+#################################################################################################################################
+
+Now, data can be used for SNP calling
