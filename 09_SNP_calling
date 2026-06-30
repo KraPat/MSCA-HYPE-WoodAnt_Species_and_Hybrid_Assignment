@@ -81,6 +81,7 @@ freebayes-puhti -time 72 -mem 64 -regions $REF/Frufa_PR_May2026_v1_2e6_data_regi
 
 
 
+
 ######################## WORK IN PROGRESS BELOW
 # max mean depth as per 'vcftools --depth' was 46x for sample 108-Flug. Later on all sites that have 2x per ind mean depth are anyway set as '.', which is why limiting to 100x with '--limit-coverage' is safe.
 # -E N=-1 disable complex variants #NOT USED CURRENTLY -  does it mess up w snpgap and vcfallelicprimitives later on?
@@ -94,33 +95,44 @@ sinteractive --account project_2009316 --mem 2000
 cd /scratch/project_2009316/EuSamples/06.VCF/raw
 module load biokit
 
-## 1. Quick format sanity check (fastest)
-## No output means that everything is okay
-bcftools view all_samples_raw.vcf > /dev/null
-## No output → VCF syntax is valid. If there are errors, this means there may be malformed lines, bad genotypes, or header issues
-
-## 2. Inspect the header
-bcftools view -h all_samples_raw.vcf
+## 1. Inspect the header
+bcftools view -h all_samples_raw.vcf | less
 ## fileformat=VCFv4.2 (or similar) exists
 ## source=freeBayes is present
 ## FORMAT fields like GT, DP, AD, RO, AO are defined
 ## Number of sample columns matches your expectations
 
-## 3. Check for illegal or suspicious variants
-bcftools norm -c w -f /scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis.fa all_samples_raw.vcf > /dev/null
-## This will warn (not modify) about: REF allele mismatches, invalid indels, malformed alleles
-
-## 4. Check chromosome naming
-bcftools query -f '%CHROM\n' all_samples_raw.vcf | sort | uniq
+## 2. Check chromosome naming
+bcftools query -f '%CHROM\n' all_samples_raw.vcf | sort | uniq > all_samples_raw.chroms.txt
 ## Look for chr1 vs 1 mixtures.
 
-bcftools sort -c all_samples_raw.vcf
+
+## The next checks take more time and shouldbe done in a bact job
+
+## 3. Check for illegal or suspicious variants
+bcftools norm -c w -f /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026 all_samples_raw.vcf > /dev/null
+## This will warn (not modify) about: REF allele mismatches, invalid indels, malformed alleles
+
+
+## 4. Check for sorting 
+bcftools sort -c all_samples_raw.vcf > /dev/null
+Note: without redirection this will try to write the entire (sorted) VCF to stdout, which is huge.
+## If you just want to check ordering, redirect to /dev/null as above.
 ## If there is no output, then it is correclty sorted
 ## If there are errors, it needs needs sorting
 
 ## 5. Summary statistics
 bcftools stats all_samples_raw.vcf > all_samples_raw.stats
 ## In the "all_samples_raw.stats" file, information on the number of SNPs, InDels, etc is stored.
+
+## XX. Quick format sanity check (fastest)
+## No output means that everything is okay
+bcftools view all_samples_raw.vcf > /dev/null
+## No output → VCF syntax is valid. If there are errors, this means there may be malformed lines, bad genotypes, or header issues
+## BUT NOT NEEDED as the other checks will also fail on a malformed VCF
+
+
+
 
 
 ###############################################################
