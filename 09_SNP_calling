@@ -126,14 +126,20 @@ bcftools query -f '%CHROM\n' all_samples_raw.vcf | sort | uniq > all_samples_raw
 module load biokit
 
 VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.vcf
-REF=/scratch/project_2009316/rufaRefGenome/
+REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
 
-# 1. Check for illegal/suspicious variants
+# 3. Check for illegal/suspicious variants
 bcftools norm -c w -f "$REF" "$VCF" > /dev/null
 ## This will warn (not modify) about: REF allele mismatches, invalid indels, malformed alleles
 
 
-# 2. Check coordinate ordering
+# 4. Check for obvious duplication / weirdness
+bcftools view -r <chrom_name> all_samples_raw.vcf | wc -l
+## If one chromosome has an absurd number of lines, it might hint at:
+## A per-read or per-allele VCF rather than per-site or something like a bug in the FreeBayes run or input.
+
+
+# 5. Check coordinate ordering
 bcftools sort -c "$VCF" > /dev/null
 ## Note: without redirection this will try to write the entire (sorted) VCF to stdout, which is huge.
 ## If you just want to check ordering, redirect to /dev/null as above.
@@ -141,7 +147,7 @@ bcftools sort -c "$VCF" > /dev/null
 ## If there are errors, it needs needs sorting
 
 
-# 3. Summary statistics
+# 6. Summary statistics
 bcftools stats "$VCF" > "${VCF%.vcf}.stats"
 ## In the "all_samples_raw.stats" file, information on the number of SNPs, InDels, etc is stored.
 
