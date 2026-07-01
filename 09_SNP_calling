@@ -80,6 +80,9 @@ BAM=/scratch/project_2009316/EuSamples/05.BAM/BAM_final
 freebayes-puhti -time 72 -mem 64 -regions $REF/Frufa_PR_May2026_v1_2e6_data_regions.txt -f $REF/Frufa_PR_May2026.fa -L $BAM/all.bam.list -k --genotype-qualities --skip-coverage 57750 --limit-coverage 100 --use-best-n-alleles 3 -out $RES/raw/all_samples_raw.vcf
 
 
+# in future, add
+# --min-mapping-quality 20 --min-base-quality 20 --ploidy 2 --use-best-n-alleles 3 --limit-coverage 80 --max-complex-gap -1 --haplotype-length -1
+
 
 
 ######################## WORK IN PROGRESS BELOW
