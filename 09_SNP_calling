@@ -111,7 +111,7 @@ bcftools query -f '%CHROM\n' all_samples_raw.vcf | sort | uniq > all_samples_raw
 
 
 ## The next checks take more time and shouldbe done in a batch job
-## "vim 9_vcf_sanity.sh"
+## "vim 9.0_sanityChecksVCF.sh"
 
 #################################################################################################################################
 
@@ -155,41 +155,168 @@ bcftools stats "$VCF" > "${VCF%.vcf}.stats"
 ## In the "all_samples_raw.stats" file, information on the number of SNPs, InDels, etc is stored.
 
 
+# 7. check if there are multiple/more maformed records
+#Step 7.1 – Get the number of samples from the header
+NSAMP=$(bcftools query -l all_samples_raw.vcf | wc -l)
+echo "$NSAMP"
+#NSAMP is expected to be 385
 
-###############################################################
-## Next, we first sort, then compress the VCF file, and lastly index it. 
+#Step 7.22 – Scan for lines with wrong column counts
+NSAMP=$(bcftools query -l all_samples_raw.vcf | wc -l)
+
+awk -v nsamp="$NSAMP" '
+BEGIN { FS = "\t" }
+!/^#/ {
+    expected = 9 + nsamp
+    if (NF != expected) {
+        # Print line number, CHROM, POS, and NF
+        print "LINE", NR, "CHROM", $1, "POS", $2, "NF", NF, "EXPECTED", expected
+    }
+}
+' all_samples_raw.vcf > malformed_records.txt
+
+###### NOTE: there was one position, which was malformed. Besides that, the file looked good.
+# Chr 11 - position 
+# LINE 52384787 CHROM chromosome_11 POS 11604477 NF 8 EXPECTED 394
+
+
+#############
+## Next, we first remove the malformed positon and compress the VCF file to a BCF file. 
 ## We use the script below and run it on the cluster
 
-###
-### Sort & compress
-###
+
+vim "9.1_Copy2BCFfile.sh"
+#################################################################################################################################
+
+!/bin/bash -l
+#SBATCH -J VCF_file
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/cp_BCF_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/cp_BCF_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=64G
+#SBATCH --mail-type=START,FAIL,END
+
+# Load bcftools (adjust to your cluster's module/env system)
+module load biokit
+
+ORIGINAL_VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.vcf
+BACKUP_VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.backup.vcf
+FIXED_BCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.bcf
+
+# Malformed site to remove (EDIT chr/pos if needed)
+CHR="chromosome_11"
+POS="11604477"
+
+echo "Original VCF: $ORIGINAL_VCF"
+echo "Backup VCF  : $BACKUP_VCF"
+echo "Fixed BCF   : $FIXED_BCF"
+echo "Removing site: $CHR:$POS"
+
+# 1. Make a backup copy of the original VCF (if not already present)
+#if [ ! -f "$BACKUP_VCF" ]; then
+#       echo "Creating backup VCF at $BACKUP_VCF"
+#       cp "$ORIGINAL_VCF" "$BACKUP_VCF"
+#else
+#       echo "Backup VCF already exists at $BACKUP_VCF; not overwriting."
+#fi
+
+# 2. Filter out the malformed record and convert directly to BCF
+#    - awk keeps all header lines (#...)
+#    - for data lines, it drops the one with CHROM==CHR and POS==POS
+#    - bcftools view reads VCF from stdin (-) and writes BCF
+
+echo "Filtering out $CHR:$POS and writing BCF..."
+
+awk -v chr="$CHR" -v pos="$POS" '
+BEGIN { FS = OFS = "\t" }
+# Keep all header lines as-is
+/^#/ { print; next }
+# For data lines, skip the malformed site; print everything else
+{
+        if (!($1 == chr && $2 == pos)) {
+                print
+        }
+}
+' "$ORIGINAL_VCF" \
+       | bcftools view -Ob -o "$FIXED_BCF" -
+
+
+#############
+## Next, we first do some sanity checks on the BCF file.
+## We use the script below and run it on the cluster
+
+
+vim "9.2_sanityChecksBCF.sh.sh"
+#################################################################################################################################
 
 #!/bin/bash -l
-#SBATCH -J comp_sort
-#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/raw/compress_sort.out
-#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/raw/compress_sort.err
+#SBATCH -J BCF_sanity
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/BCFsanit_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/BCFsanit_%A_%a.err
 #SBATCH --account=project_2009316
 #SBATCH -t 24:00:00
 #SBATCH -p small
-#SBATCH --ntasks 1
-#SBATCH --mem=8G
-#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --mail-type=START,FAIL,END
 
 module load biokit
-cd /scratch/project_2009316/EuSamples/06.VCF/raw
 
-# In the next step we "Sort" and "compress" the VCF file in one step.
-bcftools sort -m 1G freebayes.vcf -Oz -o all_samples_raw.vcf.gz -T ./tmp_sort all_samples_raw.vcf.gz
+#VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.vcf
+#REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
 
-## Compress
-## bgzip all_samples_raw.vcf 
-#samtools version 1.16.1, containing HTSlib 1.16
-#This step is actually not needed as we already compressed it above when sorting!
+# Check for illegal/suspicious variants
+bcftools norm -c w -f /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa \
+    all_samples_raw.fixed.bcf > /dev/null
 
-# Index
-tabix -p vcf all_samples_raw.vcf.gz
-bcftools index -n all_samples_raw.vcf.gz
+# output was Lines   total/split/realigned/skipped:  52384499/0/4526134/
 
-gunzip -c all_samples_raw.vcf.gz | grep -v "^#" | cut -f 1 | uniq -c > site_count_per_chromosome.tab
+#Check stats
+bcftools stats all_samples_raw.fixed.bcf > all_samples_raw.fixed.bcf.stats
 
-### END
+## END
+
+#############
+## Next, we first do some sanity checks on the BCF file.
+## We use the script below and run it on the cluster
+
+
+vim "9.3_sanityChecksBCF.sh.sh"
+#################################################################################################################################
+
+#!/bin/bash -l
+#SBATCH -J SortnIndexBCF
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/SortIndex_BCF_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/SortIndex_BCF_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=64G
+#SBATCH --mail-type=START,FAIL,END
+
+# Load bcftools (adjust to your cluster's module/env system)
+module load biokit
+
+#FIXED_BCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.bcf
+
+cd /scratch/project_2009316/EuSamples/06.VCF/raw/
+
+# Sort file
+bcftools sort -Ob -o all_samples_raw.fixed.sorted.bcf all_samples_raw.fixed.bcf
+
+# Index file
+bcftools index all_samples_raw.fixed.sorted.bcf
+
+# Count number of Variants per chromosome
+bcftools query -f '%CHROM\n' all_samples_raw.fixed.sorted.bcf \
+    | sort \
+    | uniq -c \
+    > site_count_per_chromosome.tab
+
+## END
+
+
