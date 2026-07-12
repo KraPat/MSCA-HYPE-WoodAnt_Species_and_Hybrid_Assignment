@@ -284,7 +284,7 @@ bcftools stats all_samples_raw.fixed.bcf > all_samples_raw.fixed.bcf.stats
 ## We use the script below and run it on the cluster
 
 
-vim "9.3_sanityChecksBCF.sh.sh"
+vim "9.3_SortnIndexBCF.sh"
 #################################################################################################################################
 
 #!/bin/bash -l
@@ -303,20 +303,27 @@ module load biokit
 
 #FIXED_BCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.bcf
 
-cd /scratch/project_2009316/EuSamples/06.VCF/raw/
+cd /scratch/project_2009316/EuSamples/06.VCF/raw
 
 # Sort file
-bcftools sort -Ob -o all_samples_raw.fixed.sorted.bcf all_samples_raw.fixed.bcf
+mkdir -p /scratch/project_2009316/EuSamples/06.VCF/raw/tmp_bcftools
+
+bcftools sort \
+    -T /scratch/project_2009316/EuSamples/06.VCF/raw/tmp_bcftools \
+    -Ob -o /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.sorted.bcf \
+    /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.bcf
+
+
+#bcftools sort -Ob -o all_samples_raw.fixed.sorted.bcf all_samples_raw.fixed.bcf
 
 # Index file
-bcftools index all_samples_raw.fixed.sorted.bcf
+bcftools index /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.sorted.bcf
 
 # Count number of Variants per chromosome
-bcftools query -f '%CHROM\n' all_samples_raw.fixed.sorted.bcf \
+bcftools query -f '%CHROM\n' /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.sorted.bcf \
     | sort \
     | uniq -c \
-    > site_count_per_chromosome.tab
+    > /scratch/project_2009316/EuSamples/06.VCF/raw/site_count_per_chromosome.tab
 
 ## END
-
 
