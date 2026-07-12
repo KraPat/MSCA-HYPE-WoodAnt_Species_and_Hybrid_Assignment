@@ -1,1 +1,89 @@
 Now, we have the VCF file and will do some filtering steps.
+
+vim "10.1_BCFfiltering.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J BCFfilt1
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filt1_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filt1_%A_%a.err
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --ntasks 8
+#SBATCH --mem=24G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+export PATH="/projappl/project_2009316/myenv/bin:$PATH"
+#module load biokit
+module load samtools/1.21
+
+# create directory filt
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+
+THREADS=8
+
+BASE=/scratch/project_2009316/EuSamples
+VCFDIR="$BASE/06.VCF"
+RAW="$VCFDIR/raw/all_samples_raw.fixed.sorted.bcf"
+FILT="$VCFDIR/filt"
+TMPDIR="$BASE/temp"
+REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
+
+mkdir -p "$FILT" "$TMPDIR"
+cd "$FILT"
+
+mkdir -p "$FILT" "$TMPDIR"
+cd "$FILT"
+
+# 1. Normalize (including multiallelic splitting) in BCF and convert convert to VCF text for vcfwave
+# 2. Decompose alleles (atomize) and sort and save as VCF.gz
+# 3. Strip phasing and patch missing genotype pattern (your existing sed logic)
+
+# 1. Normalize
+#bcftools norm -f "$REF" -m -both -O z -o $BASE/06.VCF/filt/all_samples.normalized.vcf.gz "$RAW"
+
+# 2. Decompose
+#bcftools norm \
+#  --atomize \
+#  -f "$REF" \
+#  -m -both \
+#  -O z \
+#  -o all_samples.norm.decomp.sorted.vcf.gz \
+#  all_samples.normalized.vcf.gz
+
+
+# 3. strip phasing
+# Apply your phasing removal & missing GT pattern fix
+# (same pattern as in your original script).
+
+bcftools +setGT \
+  all_samples.norm.decomp.sorted.vcf.gz \
+  -Oz \
+  -o all_samples.norm.decomp.sorted.nophase.vcf.gz \
+  -- -n u -t .
+
+bcftools index -t all_samples.norm.decomp.sorted.nophase.vcf.gz
+
+## END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
