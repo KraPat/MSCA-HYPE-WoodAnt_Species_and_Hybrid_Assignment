@@ -12,18 +12,14 @@ exit sinteractive
 ### END sinteracive
 
 ##### Call SNPs #####
-# Now, we create a new folder called "07.VCF_mtDNA"
-cd /scratch/project_2009316/EuSamples/
-mkdir 07.VCF_mtDNA
-
-#Next, we will do the SNP calling. Again, we will use "screen" to create an external screen
-#First, we create the needed folders
-/scratch/project_2009316/EuSamples
+# Now, we create multiple new folders 
+cd /scratch/project_2009316/EuSamples
 mkdir 07.VCF_mtDNA
 cd 07.VCF_mtDNA
 mkdir logs
 mkdir raw
 
+#Next, we will do the SNP calling. Again, we will use "screen" to create an external screen
 screen -S SNPcall_mtDNA
 module load freebayes 
 #Note: version used in 2023: v1.3.6
