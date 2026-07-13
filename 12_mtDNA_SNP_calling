@@ -1,0 +1,419 @@
+# Below, we will first call SNPs from the mitochondrial part of the whole genome data only
+# For this, we nwill use again freebayes and will only keep the "mtDNA" regions of the region file created in 09_SNP_calling. 
+# We will use sinteractive to create this regions_mtDNA file
+
+cd /scratch/project_2009316/rufaRefGenome
+### START sinteractive
+sinteractive --account project_2009316 --mem 2000
+
+grep -e MITO Frufa_PR_May2026_v1_2e6_data_regions.txt > Frufa_PR_May2026_v1_2e6_data_mtDNA.txt
+exit sinteractive
+
+### END sinteracive
+
+##### Call SNPs #####
+# Now, we create a new folder called "07.VCF_mtDNA"
+cd /scratch/project_2009316/EuSamples/
+mkdir 07.VCF_mtDNA
+
+#Next, we will do the SNP calling. Again, we will use "screen" to create an external screen
+screen -S SNPcall_mtDNA
+module load freebayes 
+#Note: version used in 2023: v1.3.6
+
+cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA
+REF=/scratch/project_2009316/rufaRefGenome
+RES=/scratch/project_2009316/EuSamples/07.VCF_mtDNA
+BAM=/scratch/project_2009316/EuSamples/05.BAM/BAM_final
+
+freebayes-puhti -time 72 -mem 64 -regions $REF/Frufa_PR_May2026_v1_2e6_data_mtDNA.txt -f $REF/Frufa_PR_May2026.fa -L $BAM/all.bam.list -k --genotype-qualities --skip-coverage 57750 --limit-coverage 100 --use-best-n-alleles 3 --pooled-continuous -F 0.05 --ploidy 1 --min-coverage 1000 -out $RES/all_samples_mtDNA_raw.vcf
+
+#XXX SNPs with XXX samples
+
+
+########################## WORK IN PROGRESS #####################################################
+############# After the SNP calling, we do some sanity checks.
+## For this, we use sinteractive and various tools:
+
+sinteractive --account project_2009316 --mem 2000
+cd /scratch/project_2009316/EuSamples/07.VCF/raw
+module load biokit
+
+## 1. Inspect the header
+bcftools view -h all_samples_mtDNA_raw.vcf | less
+## fileformat=VCFv4.2 (or similar) exists
+## source=freeBayes is present
+## FORMAT fields like GT, DP, AD, RO, AO are defined
+## Number of sample columns matches your expectations
+
+## 2. Check chromosome naming
+bcftools query -f '%CHROM\n' all_samples_mtDNA_raw.vcf | sort | uniq > all_samples_mtDNA_raw.chroms.txt
+## Look for chr1 vs 1 mixtures.
+
+
+VCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.vcf
+REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
+
+# 3. Check for illegal/suspicious variants
+bcftools norm -c w -f "$REF" "$VCF" > /dev/null
+## This will warn (not modify) about: REF allele mismatches, invalid indels, malformed alleles
+
+# 4. Check coordinate ordering
+bcftools sort -c "$VCF" > /dev/null
+## Note: without redirection this will try to write the entire (sorted) VCF to stdout, which is huge.
+## If you just want to check ordering, redirect to /dev/null as above.
+## If there is no output, then it is correclty sorted
+## If there are errors, it needs needs sorting
+
+# 5. Summary statistics
+bcftools stats "$VCF" > "${VCF%.vcf}.stats"
+## In the "all_samples_raw.stats" file, information on the number of SNPs, InDels, etc is stored.
+
+# 6. check if there are multiple/more maformed records
+#Step 7.1 – Get the number of samples from the header
+NSAMP=$(bcftools query -l all_samples_mtDNA_raw.vcf | wc -l)
+echo "$NSAMP"
+#NSAMP is expected to be 385
+
+#Step 7.22 – Scan for lines with wrong column counts
+
+awk -v nsamp="$NSAMP" '
+BEGIN { FS = "\t" }
+!/^#/ {
+    expected = 9 + nsamp
+    if (NF != expected) {
+        # Print line number, CHROM, POS, and NF
+        print "LINE", NR, "CHROM", $1, "POS", $2, "NF", NF, "EXPECTED", expected
+    }
+}
+' all_samples_mtDNA_raw.vcf > malformed_records.txt
+
+###### NOTE: XXX
+
+
+#!/bin/bash -l
+#SBATCH -J comp_sort
+#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF/logs/SortnCompress_%A.out
+#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF/logs/SortnCompress_%A.err
+#SBATCH --account=project_2009316
+#SBATCH -t 02:00:00
+#SBATCH -p small
+#SBATCH --ntasks 1
+#SBATCH --mem=4G
+
+module load biokit
+mkdir -p /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs
+
+cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA
+
+# Count the number of sites #928
+gunzip -c mt_F005_C1000_all_samples.vcf.gz | grep -v "^#" | cut -f 1 | uniq -c > mt_F005_C1000_site_count_raw.tab
+
+# Sort, compress and index file
+mkdir -p /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_bcftools
+
+bcftools sort \
+    -T /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_bcftools \
+    -Oz -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz \
+    /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.vcf
+
+bcftools index /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz
+
+# Count number of Variants per chromosome
+bcftools query -f '%CHROM\n' /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz \
+    | sort \
+    | uniq -c \
+    > /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/site_count_per_chromosome.tab
+
+
+
+
+
+#BELOW only needed if problems are found 
+#############
+## Next, we first remove the malformed positon and compress the VCF file to a BCF file. 
+## We use the script below and run it on the cluster
+
+
+vim "9.1_Copy2BCFfile.sh"
+#################################################################################################################################
+
+!/bin/bash -l
+#SBATCH -J VCF_file
+#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/cp_BCF_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/cp_BCF_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=64G
+#SBATCH --mail-type=START,FAIL,END
+
+# Load bcftools (adjust to your cluster's module/env system)
+module load biokit
+
+ORIGINAL_VCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.vcf
+BACKUP_VCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.backup.vcf
+FIXED_BCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.bcf
+
+# Malformed site to remove (EDIT chr/pos if needed)
+CHR="chromosome_11"
+POS="11604477"
+
+echo "Original VCF: $ORIGINAL_VCF"
+echo "Backup VCF  : $BACKUP_VCF"
+echo "Fixed BCF   : $FIXED_BCF"
+echo "Removing site: $CHR:$POS"
+
+# 1. Make a backup copy of the original VCF (if not already present)
+#if [ ! -f "$BACKUP_VCF" ]; then
+#       echo "Creating backup VCF at $BACKUP_VCF"
+#       cp "$ORIGINAL_VCF" "$BACKUP_VCF"
+#else
+#       echo "Backup VCF already exists at $BACKUP_VCF; not overwriting."
+#fi
+
+# 2. Filter out the malformed record and convert directly to BCF
+#    - awk keeps all header lines (#...)
+#    - for data lines, it drops the one with CHROM==CHR and POS==POS
+#    - bcftools view reads VCF from stdin (-) and writes BCF
+
+echo "Filtering out $CHR:$POS and writing BCF..."
+
+awk -v chr="$CHR" -v pos="$POS" '
+BEGIN { FS = OFS = "\t" }
+# Keep all header lines as-is
+/^#/ { print; next }
+# For data lines, skip the malformed site; print everything else
+{
+        if (!($1 == chr && $2 == pos)) {
+                print
+        }
+}
+' "$ORIGINAL_VCF" \
+       | bcftools view -Ob -o "$FIXED_BCF" -
+
+
+#############
+## Next, we first do some sanity checks on the BCF file.
+## We use the script below and run it on the cluster
+
+
+vim "9.2_sanityChecksBCF.sh.sh"
+#################################################################################################################################
+
+#!/bin/bash -l
+#SBATCH -J BCF_sanity
+#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/BCFsanit_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/BCFsanit_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 24:00:00
+#SBATCH -p small
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --mail-type=START,FAIL,END
+
+module load biokit
+
+#VCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.vcf
+#REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
+
+# Check for illegal/suspicious variants
+bcftools norm -c w -f /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa \
+    all_samples_raw.fixed.bcf > /dev/null
+
+# output was Lines   total/split/realigned/skipped:  52384499/0/4526134/
+
+#Check stats
+bcftools stats all_samples_raw.fixed.bcf > all_samples_raw.fixed.bcf.stats
+
+## END
+
+#############
+## Next, we first do some sanity checks on the BCF file.
+## We use the script below and run it on the cluster
+
+
+vim "9.3_SortnIndexBCF.sh"
+#################################################################################################################################
+
+#!/bin/bash -l
+#SBATCH -J SortnIndexBCF
+#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/SortIndex_BCF_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/SortIndex_BCF_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=64G
+#SBATCH --mail-type=START,FAIL,END
+
+# Load bcftools (adjust to your cluster's module/env system)
+module load biokit
+
+#FIXED_BCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.bcf
+
+cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw
+
+# Sort file
+mkdir -p /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_bcftools
+
+bcftools sort \
+    -T /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_bcftools \
+    -Ob -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.sorted.bcf \
+    /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.bcf
+
+
+#bcftools sort -Ob -o all_samples_raw.fixed.sorted.bcf all_samples_raw.fixed.bcf
+
+# Index file
+bcftools index /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.sorted.bcf
+
+# Count number of Variants per chromosome
+bcftools query -f '%CHROM\n' /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.sorted.bcf \
+    | sort \
+    | uniq -c \
+    > /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/site_count_per_chromosome.tab
+
+## END
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------
+
+
+####### SORTING, COMPRESSING, AND INDEXING #####
+#Now, we sort and compress the VCF file using sineractive
+sinteractive --account project_2009316 --mem 2000
+module load biokit
+cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA
+
+# In the next step we "Sort" and "compress" the VCF file in one step.
+bcftools sort -m 1G -Oz -o all_samples_mtDNA_raw.vcf.gz -T ./tmp_sort all_samples_mtDNA_raw.vcf
+
+# Index
+tabix -p vcf all_samples_mtDNA_raw.vcf.gz
+bcftools index -n all_samples_mtDNA_raw.vcf.gz
+
+#Extract the number of sites per mtDNA 
+gunzip -c all_samples_mtDNA_raw.vcf.gz | grep -v "^#" | cut -f 1 | uniq -c > site_count_per_mtDNA.tab
+#185
+
+
+######### Create file for PopArt #########
+## Next, we create a consensus sequence by by applying VCF variants to a reference fasta file using vcftools vcf-consensus scripts from
+## https://github.com/vcftools/vcftools/blob/master/src/perl/vcf-consensus#L111
+#Note, this is a pearl script. You have to copy-paste it to a file "vcf-consensus_code.pl" and make it executable with
+chmod +x cf_consensus.pl
+
+#Now, we create a sample list using 
+bcftools query -l all_samples_mtDNA_raw.vcf.gz > samples.list
+
+#Then you can use it. I now created a forward loop, which iterates through the samples.list file and creates the consensu file. For this, you forst run sinteractive
+
+#while IFS= read -r samples; do
+#        echo $samples
+#        samtools faidx /scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis.fa mtDNA | ./vcf_consensus.pl -H 1 -s $samples Samples257_DP8.257inds.AN10.mtDNA.mac2.vcf.gz > $samples"_mtDNA".fa
+#done < samples.list
+#NOTE. -H keeps the first haplotype, -s are the samples
+
+#In one line:
+while IFS= read -r s; do samtools faidx /scratch/project_2009316/refGenome/Formica_hybrid_v1_wFhyb_Sapis.fa mtDNA | ./vcf_consensus.pl -H 1 -s "$s" all_samples_mtDNA_raw.vcf.gz > "${s}_mtDNA.fa"; done < samples.list
+
+###
+#After this, you will fa.files for each sample. Move these files into a folder "mtDNA_fa", which you will create using mkdir
+mkdir mtDNA_fa
+mv *fa mtDNA_fa/
+
+#Inside the folder, we now add all fa-files into a sample list
+ls *fa > list.samples
+
+#Each fa.file starts with ">mtDNA", but we want to have them all stored in one fasta-file with the sample ID.
+# To do this, we create a new script, "mafft.sh". This script, first, re-names the first line in each fasta file with the sample ID (e.g. from >mtDNA to >1-Fprat).
+#Second, it cats all fasta-files into one file (all38_mtDNAsamples.fa).
+#Third, it aligns the files using mafft with the output: all38_mtDNAsamples_aligned.fa
+#See information of mafft under:
+#Note: https://mafft.cbrc.jp/alignment/software/anysymbol.html
+#Note: https://www.ebi.ac.uk/jdispatcher/msa/mafft?stype=dna
+#Note: I used --anysymbol to make sure that unusual characters such as U, #, . are scored as unknown
+#For consistency, the script is below:
+
+########################## Start mafft.sh script ####################
+#!/bin/bash -l
+#SBATCH -J Align_mtDNA
+#SBATCH -o /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/07.VCF_mtDNA/Align_mtDNA.out
+#SBATCH -e /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/07.VCF_mtDNA/Align_mtDNA.err
+#SBATCH --account=project_2009316
+#SBATCH -t 00:00:30
+#SBATCH -p small
+#SBATCH --ntasks 1
+#SBATCH --mem=4G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+module load biokit
+
+#First, we re-name the first line in each file
+while IFS= read -r file; do
+    # Extract the filename (without path if there's a directory)
+    filename=$(basename "$file")
+
+    # Replace the first line with ">sampleName: filename"
+    sed -i "1s/.*/>sampleName: $filename/" "$file"
+
+    echo "Replaced first line of $file with >sampleName: $filename"
+done < samples.txt
+
+
+#Second, we cat all samples together
+cat *.fa > all38_mtDNAsamples.fa
+
+#Third, we use mafft to align the samples
+mafft --anysymbol all38_mtDNAsamples.fa > all38_mtDNAsamples_aligned.fa
+
+#End script
+
+
+##############
+#Now, we download the file locally to plot it in PopArt. PopArt needs a phylip format, while the data format is mafft.
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/07.VCF_mtDNA/mtDNA_fa/all38_mtDNAsamples_aligned.fa ./ 
+
+
+##WORK IN PROGRESS BELOW
+#So, we need to change the format manually using the perl script "Fasta2Phylip.pl" from https://indra.mullins.microbiol.washington.edu/perlscript/docs/Sequence.html
+#After downloading the script (do not forget to "chmod +x script), we run the script locally under 
+#Linux - Root - Genomic data - Fasta2Phylip
+#The code is below:
+Fasta2Phylip.pl all38_mtDNAsamples_aligned.fa all38_mtDNAsamples_aligned.phylip
+
+#The file "all38_mtDNAsamples_aligned.phylip" is now in a phylip format
+#https://scikit.bio/docs/latest/generated/skbio.io.format.phylip.html
+#and can be used as it is, but the suffix needs to be changed from "phylip" to "nex" (For more details, check the tutorial: https://dcsoto.github.io/2024/09/30/haplotype-network
+all257_samples_aligned.nex
+#This can be done locally. You can also use PGDspider to transform it! Then, you can use it in PopArt.
+
+#### PopArt ####
+# In PopArt, you load the "nex" file via the "File-Open"Function. Then you create a "Median Joining spanning network". Here you are asked to give an "Epsilon"-value. "Epsilon defines a threshold for allowing connections that aren't the shortest (most parsimonious) path between nodes (haplotypes). By setting a higher epsilon, you permit more connections, allowing the network to capture more complexity, especially when evolutionary relationships are unclear or reticulate (branching and reconnecting). (-> from CHATGPT). 
+
+# You can also add a "trait.txt" file, with which you can color-code the nodes based on species identity. In this file, each sample is in one line and starts with the species ID followed by a numeric code of 0 and 1 indicaitng to which species it belongs.
+#Note, the species IDs and the IDs in the phylip file need to be identical for this to work
+#For example 0,1,0,0,0,0,0,0 means it belongs to F aquilonia. For simplicity, I've added part of such a file below:
+AQU,LUG,RUF,POL,PRA,HYB1,HYB2,HYB3
+102-Frufa_mtDNA.fa,0,0,1,0,0,0,0,0
+108-Flug_mtDNA.fa,0,1,0,0,0,0,0,0
+115-Flug_mtDNA.fa,0,1,0,0,0,0,0,0
+117-Fprat_mtDNA.fa,0,0,0,0,1,0,0,0
+119-Flug_mtDNA.fa,0,0,0,0,0,0,1,0
+120-Fprat_mtDNA.fa,0,0,0,0,1,0,0,0
+126-Flug_mtDNA.fa,0,0,0,0,0,0,1,0
+52-Fpol_mtDNA.fa,0,0,0,0,0,1,0,0
+72-Frufa_mtDNA.fa,0,0,1,0,0,0,0,0
+
+#We can load both files into PopArt. First the phylip-alignment, then the trait file. Do NOT delete the alignment when loading the file.
+#First run the minimum and then the median spanning network
+
+##END
