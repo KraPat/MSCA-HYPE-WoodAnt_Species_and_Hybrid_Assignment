@@ -17,6 +17,13 @@ cd /scratch/project_2009316/EuSamples/
 mkdir 07.VCF_mtDNA
 
 #Next, we will do the SNP calling. Again, we will use "screen" to create an external screen
+#First, we create the needed folders
+/scratch/project_2009316/EuSamples
+mkdir 07.VCF_mtDNA
+cd 07.VCF_mtDNA
+mkdir logs
+mkdir raw
+
 screen -S SNPcall_mtDNA
 module load freebayes 
 #Note: version used in 2023: v1.3.6
@@ -91,6 +98,8 @@ BEGIN { FS = "\t" }
 ###### NOTE: XXX
 
 
+vim "12.1_SortnCompress.sh"
+#################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J comp_sort
 #SBATCH -o /scratch/project_2009316/EuSamples/07.VCF/logs/SortnCompress_%A.out
@@ -99,25 +108,23 @@ BEGIN { FS = "\t" }
 #SBATCH -t 02:00:00
 #SBATCH -p small
 #SBATCH --ntasks 1
-#SBATCH --mem=4G
+#SBATCH --mem=8G
 
+set -euo pipefail
 module load biokit
 mkdir -p /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs
 
 cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA
 
-# Count the number of sites #928
-gunzip -c mt_F005_C1000_all_samples.vcf.gz | grep -v "^#" | cut -f 1 | uniq -c > mt_F005_C1000_site_count_raw.tab
-
 # Sort, compress and index file
-mkdir -p /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_bcftools
+mkdir -p /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_vcftools
 
-bcftools sort \
+vcftools sort \
     -T /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_bcftools \
     -Oz -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz \
     /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.vcf
 
-bcftools index /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz
+vcftools index /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz
 
 # Count number of Variants per chromosome
 bcftools query -f '%CHROM\n' /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz \
@@ -125,7 +132,12 @@ bcftools query -f '%CHROM\n' /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw
     | uniq -c \
     > /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/site_count_per_chromosome.tab
 
+# Count the number of sites #928
+#gunzip -c all_samples_mtDNA_raw.sorted.vcf.g | grep -v "^#" | cut -f 1 | uniq -c > all_samples_mtDNA_raw.sorted_site_count_raw.tab
 
+rm -rf /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_vcftools
+
+## END
 
 
 
@@ -192,6 +204,9 @@ BEGIN { FS = OFS = "\t" }
 }
 ' "$ORIGINAL_VCF" \
        | bcftools view -Ob -o "$FIXED_BCF" -
+
+
+
 
 
 #############
