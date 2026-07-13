@@ -84,8 +84,6 @@ freebayes-puhti -time 72 -mem 64 -regions $REF/Frufa_PR_May2026_v1_2e6_data_regi
 # --min-mapping-quality 20 --min-base-quality 20 --ploidy 2 --use-best-n-alleles 3 --limit-coverage 80 --max-complex-gap -1 --haplotype-length -1
 
 
-
-######################## WORK IN PROGRESS BELOW
 # max mean depth as per 'vcftools --depth' was 46x for sample 108-Flug. Later on all sites that have 2x per ind mean depth are anyway set as '.', which is why limiting to 100x with '--limit-coverage' is safe.
 # -E N=-1 disable complex variants #NOT USED CURRENTLY -  does it mess up w snpgap and vcfallelicprimitives later on?
 # --use-best-n-alleles 3 = reduce computational time to exclude multiple alternative alleles if present. Setting to 3 is safe since all but biallelic sites will be filtered out later on.
