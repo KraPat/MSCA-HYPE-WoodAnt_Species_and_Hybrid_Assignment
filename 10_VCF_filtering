@@ -147,7 +147,7 @@ bcftools index -n all_samples.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
 
 # Optional: quick count of  SNPs (sanity check)
 bcftools view -H all_samples.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz | wc -l
-
+## has # 17,772,603 SNPs
 # END
 
 -----
