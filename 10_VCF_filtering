@@ -68,8 +68,89 @@ bcftools index -t all_samples.norm.decomp.sorted.nophase.vcf.gz
 
 ## END
 
+--------
+# Now, we conduct more filtering steps
 
 
+vim "10.2_BCFfiltering.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J BCFfilt2
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filt2_%A.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filt2_%A.err
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --ntasks 8
+#SBATCH --mem=24G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+export PATH="/projappl/project_2009316/myenv/bin:$PATH"
+module load biokit
+
+# create directory filt
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+
+THREADS=8
+
+BASE=/scratch/project_2009316/EuSamples
+VCFDIR="$BASE/06.VCF"
+FILT="$VCFDIR/filt"
+TMPDIR="$BASE/temp"
+
+INPUT="$FILT/all_samples.norm.decomp.sorted.nophase.vcf.gz"
+
+cd "$FILT"
+
+# 1. SnpGap filter
+# 2. Remove non-SNPs (TYPE != "snp")
+# 3. Read balance filter (RPL/RPR/SAF/SAR)
+# 4. Keep only PASS variants
+# 5. QUAL >= 30
+# 6. Keep biallelic sites (2 alleles)
+# 7. Write final SNP VCF + index
+
+bcftools filter \
+    --threads "$THREADS" \
+    --SnpGap 2 \
+    -Ou -s+ \
+    "$INPUT" \
+  | bcftools filter \
+      --threads "$THREADS" \
+      -e 'TYPE!="snp"' \
+      -s NonSnp \
+      -Ou \
+  | bcftools filter \
+      --threads "$THREADS" \
+      -s Balance -m+ \
+      -i 'RPL>=1 && RPR>=1 && SAF>=1 && SAR>=1' \
+      -Ou \
+  | bcftools view \
+      --threads "$THREADS" \
+      -f PASS \
+      -Ou \
+  | bcftools filter \
+      --threads "$THREADS" \
+      --include 'QUAL>=30' \
+      -Ou \
+  | bcftools view \
+      --threads "$THREADS" \
+      --min-alleles 2 \
+      --max-alleles 2 \
+      -Oz \
+      -o all_samples.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
+
+bcftools index -t all_samples.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
+bcftools index -n all_samples.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
+
+# Optional: quick count of  SNPs (sanity check)
+bcftools view -H all_samples.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz | wc -l
+
+# END
+
+-----
 
 
 
