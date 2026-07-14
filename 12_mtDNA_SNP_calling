@@ -31,10 +31,9 @@ BAM=/scratch/project_2009316/EuSamples/05.BAM/BAM_final
 
 freebayes-puhti -time 72 -mem 64 -regions $REF/Frufa_PR_May2026_v1_2e6_data_mtDNA.txt -f $REF/Frufa_PR_May2026.fa -L $BAM/all.bam.list -k --genotype-qualities --skip-coverage 57750 --limit-coverage 100 --use-best-n-alleles 3 --pooled-continuous -F 0.05 --ploidy 1 --min-coverage 1000 -out $RES/all_samples_mtDNA_raw.vcf
 
-#XXX SNPs with XXX samples
+# 1032 SNPs with 385 samples
 
 
-########################## WORK IN PROGRESS #####################################################
 ############# After the SNP calling, we do some sanity checks.
 ## For this, we use sinteractive and various tools:
 
@@ -53,33 +52,30 @@ bcftools view -h all_samples_mtDNA_raw.vcf | less
 bcftools query -f '%CHROM\n' all_samples_mtDNA_raw.vcf | sort | uniq > all_samples_mtDNA_raw.chroms.txt
 ## Look for chr1 vs 1 mixtures.
 
-
+## 3. Check for illegal/suspicious variants
 VCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.vcf
 REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
-
-# 3. Check for illegal/suspicious variants
 bcftools norm -c w -f "$REF" "$VCF" > /dev/null
 ## This will warn (not modify) about: REF allele mismatches, invalid indels, malformed alleles
 
-# 4. Check coordinate ordering
+## 4. Check coordinate ordering
 bcftools sort -c "$VCF" > /dev/null
 ## Note: without redirection this will try to write the entire (sorted) VCF to stdout, which is huge.
 ## If you just want to check ordering, redirect to /dev/null as above.
 ## If there is no output, then it is correclty sorted
 ## If there are errors, it needs needs sorting
 
-# 5. Summary statistics
+## 5. Summary statistics
 bcftools stats "$VCF" > "${VCF%.vcf}.stats"
 ## In the "all_samples_raw.stats" file, information on the number of SNPs, InDels, etc is stored.
 
-# 6. check if there are multiple/more maformed records
+## 6. check if there are multiple/more maformed records
 #Step 7.1 – Get the number of samples from the header
 NSAMP=$(bcftools query -l all_samples_mtDNA_raw.vcf | wc -l)
 echo "$NSAMP"
 #NSAMP is expected to be 385
 
-#Step 7.22 – Scan for lines with wrong column counts
-
+## Step 7.22 – Scan for lines with wrong column counts
 awk -v nsamp="$NSAMP" '
 BEGIN { FS = "\t" }
 !/^#/ {
@@ -90,8 +86,6 @@ BEGIN { FS = "\t" }
     }
 }
 ' all_samples_mtDNA_raw.vcf > malformed_records.txt
-
-###### NOTE: XXX
 
 
 vim "12.1_SortnCompress.sh"
@@ -116,7 +110,7 @@ cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA
 mkdir -p /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_vcftools
 
 vcftools sort \
-    -T /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_bcftools \
+    -T /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_vcftools \
     -Oz -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz \
     /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.vcf
 
