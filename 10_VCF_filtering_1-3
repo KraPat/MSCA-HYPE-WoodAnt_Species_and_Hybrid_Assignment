@@ -248,14 +248,19 @@ vcftools \
 Rscript minMaxDP.R
 # -> ${BASENAME}.fixedHeader.idepth.MinMax
 
----
+# Below is the r-script. Change names accordinly before using!
+# dat = read.table("all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth", h = T)
+# dat$MIN_DEPTH = round((dat$MEAN_DEPTH-.5)/2) # min depth is half of mean depth
+# dat$MAX_DEPTH = round((dat$MEAN_DEPTH)*2) # max depth is twice mean depth
+# write.table(dat, "all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth.MinMax", col.names = T, row.names = F, quote = F, sep = "\t")
+
+----
 # Note, if this does not work on cluster, you have to download it and run it locally
 
 scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth ./
 scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt/minMaxDP.R ./
 
 ## Run script in R
-...
 ## If you run the script on a local Windows machine, make sure that you check the resulting file for tabs, justification, etc
 
 ## Upload file to cluter
@@ -264,8 +269,8 @@ scp ./all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth.MinMax krap
 mkdir logs
 mkdir individualDP
 
----
-# Continue then with the script
+----
+# Continue then with the bash script
 
 ##
 ## 2.1.d. Prepare folders and sample list
