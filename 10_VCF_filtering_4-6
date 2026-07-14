@@ -1,0 +1,161 @@
+# Until now, we have filtered the VCF file. So first (10.4_BCFfiltering.sh), we do per‑individual depth filtering based on sample‑specific max DP, and constant min DP.
+# So for each individual, we create a VCF for which the genotypes are set to "." where DP is outside [dpmin, dpmax) and index them
+# Second (10.5_BCFfiltering.sh), we merge newly DP‑filtered VCF files into a single file, then do further HWE testing and HWE filtering.
+# Lastly (10.6_BCFfiltering.sh), we delete old files
+
+vim "10.4_BCFfiltering.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J splitDP
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/splitDP_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/splitDP_%a.err
+#SBATCH -t 24:00:00
+#SBATCH -p small
+#SBATCH --array=38-75       # <-- 385 last -  adjust to number of lines in ind.list
+#SBATCH --ntasks=1
+#SBATCH --mem=12G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+module load biokit
+#export PATH="/projappl/project_2009316/myenv/bin:$PATH"
+
+BASE=/scratch/project_2009316/EuSamples
+VCFDIR="$BASE/06.VCF"
+FILT="$VCFDIR/filt"
+
+cd "$FILT"
+
+BASENAME="all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader"
+FIXED_VCF="${BASENAME}.vcf.gz"
+DP_THRESH="${BASENAME}.idepth.MinMax"
+
+# Get individual ID from ind.list
+ind=$(sed -n "${SLURM_ARRAY_TASK_ID}p" ind.list)
+
+#cd /scratch/project_2009316/EuSamples/06.VCF/filt
+mkdir -p "individualDP/${ind}"
+cd "individualDP/${ind}"
+
+# Hard-coded min DP; max is sample-specific from DP_THRESH
+dpmin=2
+dpmax=$(grep -w "$ind" "$FILT/$DP_THRESH" | cut -f5)
+
+echo "Processing individual $ind with $dpmin < DP <= $dpmax"
+
+bcftools view \
+  -s "$ind" \
+  -Ou "$FILT/$FIXED_VCF" \
+  | bcftools filter \
+      -e "FORMAT/DP < ${dpmin} | FORMAT/DP >= ${dpmax}" \
+      --set-GTs . \
+      -Oz \
+      -o "${ind}.vcf.gz"
+
+bcftools index -t "${ind}.vcf.gz"
+
+#END
+
+
+vim "10.5_BCFfiltering.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J filt3_HWE
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filt3_HWE.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filt3_HWE.err
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --ntasks=4
+#SBATCH --mem=12G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+module load biokit
+module load r-env
+export PATH="/projappl/project_2009316/myenv/bin:$PATH"
+
+BASE=/scratch/project_2009316/EuSamples
+VCFDIR="$BASE/06.VCF"
+FILT="$VCFDIR/filt"
+
+cd "$FILT/individualDP"
+
+# 3.1. Combine all samples (DP-filtered)
+ls */*.vcf.gz > sample.list
+
+# 3.1. Combine all samples (DP-filtered)
+ls */*.vcf.gz > sample.list
+
+bcftools merge \
+  -l sample.list \
+  -Oz \
+  --threads 4 \
+  -o ../all_samples.SNPQ30.biall.fixedHeader.indDP.vcf.gz
+
+cd ..
+
+# 3.2. HWE testing with vcftools
+vcftools \
+  --gzvcf all_samples.SNPQ30.biall.fixedHeader.indDP.vcf.gz \
+  --hardy \
+  --out SAMPLES_hwe
+
+# 3.3. Extract sites with heterozygote excess in R and generate BED file
+srun Rscript hwe_filtering.R
+
+## Rscript for the sake of completeness
+vim "hwe_filtering.R"
+###--- START R-SCRIPT ---###
+# get the filename to read the hwe test
+filename = "SAMPLES_hwe" # file name of reference table
+# print the command line options
+print(paste("file name with hwe output:", filename))
+
+# Read the HW results
+hwvalues <- read.table(paste(filename,".hwe",sep=""), header=T, stringsAsFactors = F)
+# Get distribution of the p-values
+print(paste("he excess", sum(hwvalues$P_HET_EXCESS<0.01)))
+print(paste("he deficit", sum(hwvalues$P_HET_DEFICIT<0.01)))
+print(paste("he overall", sum(hwvalues$P_HWE<0.01)))
+
+# remove only the sites with excess of heterozygotes
+indextoremove = which(hwvalues$P_HET_EXCESS<0.01)
+# Create BED file with the sites that fail the HW test for excess of heterozygotes
+# BED file has three entries:
+chromosome, position-1, position (it is position-1 because it is assumed that the first base is 0)
+position = hwvalues[indextoremove, 2]
+bedmatrix = matrix(c(hwvalues[indextoremove, 1], format(position-1, scientific = F), format(position, scientific = F)), ncol=3, byrow=F)
+write("#Sites with heterozygosity excess", file=paste("nohwe_excess_",filename,".bed",sep=""))
+write(t(bedmatrix), file=paste("nohwe_excess_",filename,".bed",sep=""), ncolumns = 3, append=T)
+###--- END R-SCRIPT ---###
+
+----
+# If the Rscript does not run, we need to download the script and file and run it locally.
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt/SAMPLES_hwe ./
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt/hwe_filtering.R ./
+
+## Run script in R
+## If you run the script on a local Windows machine, make sure that you check the resulting file for tabs, justification, etc
+
+## Upload file to cluter
+scp ./all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth.MinMax krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt/nohwe_excess_SAMPLES_hwe.bed
+# Then continue with the bash script
+----
+
+# 3.4. Remove sites with heterozygote excess from VCF
+vcftools \
+  --gzvcf all_samples.SNPQ30.biall.fixedHeader.indDP.vcf.gz \
+  --exclude-bed nohwe_excess_SAMPLES_hwe.bed \
+  --recode \
+  --recode-INFO-all \
+  --stdout \
+  | bgzip > all_samples.SNPQ30.biall.fixedHeader.indDP.hwe.vcf.gz
+
+bcftools index -t all_samples.SNPQ30.biall.fixedHeader.indDP.hwe.vcf.gz
+
+## END
+
