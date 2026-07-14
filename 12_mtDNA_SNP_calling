@@ -92,8 +92,8 @@ vim "12.1_SortnCompress.sh"
 #################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J comp_sort
-#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF/logs/SortnCompress_%A.out
-#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF/logs/SortnCompress_%A.err
+#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/SortnCompress_%A.out
+#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/SortnCompress_%A.err
 #SBATCH --account=project_2009316
 #SBATCH -t 02:00:00
 #SBATCH -p small
@@ -109,12 +109,12 @@ cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA
 # Sort, compress and index file
 mkdir -p /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_vcftools
 
-vcftools sort \
+bcftools sort \
     -T /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_vcftools \
     -Oz -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz \
     /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.vcf
 
-vcftools index /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz
+bcftools index /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz
 
 # Count number of Variants per chromosome
 bcftools query -f '%CHROM\n' /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.sorted.vcf.gz \
@@ -124,190 +124,168 @@ bcftools query -f '%CHROM\n' /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw
 
 # Count the number of sites #928
 #gunzip -c all_samples_mtDNA_raw.sorted.vcf.g | grep -v "^#" | cut -f 1 | uniq -c > all_samples_mtDNA_raw.sorted_site_count_raw.tab
-
+# 1105 sites
 rm -rf /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_vcftools
 
 ## END
 
+------------------------------------------
 
-
-#BELOW only needed if problems are found 
-#############
-## Next, we first remove the malformed positon and compress the VCF file to a BCF file. 
-## We use the script below and run it on the cluster
-
-
-vim "9.1_Copy2BCFfile.sh"
+vim "10.2_mtDNAfiltering.sh"
 #################################################################################################################################
-
-!/bin/bash -l
-#SBATCH -J VCF_file
-#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/cp_BCF_%A_%a.out
-#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/cp_BCF_%A_%a.err
+#!/bin/bash -l
+#SBATCH -J BCFfilt1
 #SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/filt1_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/filt1_%A_%a.err
 #SBATCH -t 48:00:00
 #SBATCH -p small
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=64G
-#SBATCH --mail-type=START,FAIL,END
+#SBATCH --ntasks 8
+#SBATCH --mem=24G
+#SBATCH --mail-type=BEGIN,END,FAIL
 
-# Load bcftools (adjust to your cluster's module/env system)
-module load biokit
+set -euo pipefail
 
-ORIGINAL_VCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.vcf
-BACKUP_VCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.backup.vcf
-FIXED_BCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.bcf
+export PATH="/projappl/project_2009316/myenv/bin:$PATH"
+#module load biokit
+module load samtools/1.21
 
-# Malformed site to remove (EDIT chr/pos if needed)
-CHR="chromosome_11"
-POS="11604477"
+# create directory filt
+cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA/filt
 
-echo "Original VCF: $ORIGINAL_VCF"
-echo "Backup VCF  : $BACKUP_VCF"
-echo "Fixed BCF   : $FIXED_BCF"
-echo "Removing site: $CHR:$POS"
+THREADS=8
 
-# 1. Make a backup copy of the original VCF (if not already present)
-#if [ ! -f "$BACKUP_VCF" ]; then
-#       echo "Creating backup VCF at $BACKUP_VCF"
-#       cp "$ORIGINAL_VCF" "$BACKUP_VCF"
-#else
-#       echo "Backup VCF already exists at $BACKUP_VCF; not overwriting."
-#fi
+BASE=/scratch/project_2009316/EuSamples
+VCFDIR="$BASE/07.VCF_mtDNA"
+RAW="$VCFDIR/raw/all_samples_mtDNA_raw.sorted.vcf.gz"
+FILT="$VCFDIR/filt"
+TMPDIR="$BASE/temp"
+REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
 
-# 2. Filter out the malformed record and convert directly to BCF
-#    - awk keeps all header lines (#...)
-#    - for data lines, it drops the one with CHROM==CHR and POS==POS
-#    - bcftools view reads VCF from stdin (-) and writes BCF
+mkdir -p "$FILT" "$TMPDIR"
+cd "$FILT"
 
-echo "Filtering out $CHR:$POS and writing BCF..."
+mkdir -p "$FILT" "$TMPDIR"
+cd "$FILT"
 
-awk -v chr="$CHR" -v pos="$POS" '
-BEGIN { FS = OFS = "\t" }
-# Keep all header lines as-is
-/^#/ { print; next }
-# For data lines, skip the malformed site; print everything else
-{
-        if (!($1 == chr && $2 == pos)) {
-                print
-        }
-}
-' "$ORIGINAL_VCF" \
-       | bcftools view -Ob -o "$FIXED_BCF" -
+# 1. Normalize (including multiallelic splitting) in BCF and convert convert to VCF text for vcfwave
+# 2. Decompose alleles (atomize) and sort and save as VCF.gz
+# 3. Strip phasing and patch missing genotype pattern (your existing sed logic)
+
+# 1. Normalize
+#bcftools norm -f "$REF" -m -both -O z -o $BASE/07.VCF_mtDNA/filt/all_samples_mtDNA_raw.sorted.vcf.gz "$RAW"
+
+# 2. Decompose
+#bcftools norm \
+#  --atomize \
+#  -f "$REF" \
+#  -m -both \
+#  -O z \
+#  -o all_samples_mtDNA.norm.decomp.sorted.vcf.gz \
+#  all_samples_mtDNA_raw.sorted.vcf.gz
 
 
+# 3. strip phasing
+# Apply your phasing removal & missing GT pattern fix
+# (same pattern as in your original script).
 
+bcftools +setGT \
+  all_samples_mtDNA.norm.decomp.sorted.vcf.gz \
+  -Oz \
+  -o all_samples_mtDNA.norm.decomp.sorted.nophase.vcf.gz \
+  -- -n u -t .
 
-
-#############
-## Next, we first do some sanity checks on the BCF file.
-## We use the script below and run it on the cluster
-
-
-vim "9.2_sanityChecksBCF.sh.sh"
-#################################################################################################################################
-
-#!/bin/bash -l
-#SBATCH -J BCF_sanity
-#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/BCFsanit_%A_%a.out
-#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/BCFsanit_%A_%a.err
-#SBATCH --account=project_2009316
-#SBATCH -t 24:00:00
-#SBATCH -p small
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-#SBATCH --mail-type=START,FAIL,END
-
-module load biokit
-
-#VCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.vcf
-#REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
-
-# Check for illegal/suspicious variants
-bcftools norm -c w -f /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa \
-    all_samples_raw.fixed.bcf > /dev/null
-
-# output was Lines   total/split/realigned/skipped:  52384499/0/4526134/
-
-#Check stats
-bcftools stats all_samples_raw.fixed.bcf > all_samples_raw.fixed.bcf.stats
+bcftools index -t all_samples_mtDNA.norm.decomp.sorted.nophase.vcf.gz
 
 ## END
 
-#############
-## Next, we first do some sanity checks on the BCF file.
-## We use the script below and run it on the cluster
+--------
+# Now, we conduct more filtering steps
+# 1. SnpGap filter
+# 2. Remove non-SNPs (TYPE != "snp")
+# 3. Read balance filter (RPL/RPR/SAF/SAR)
+# 4. Keep only PASS variants
+# 5. QUAL >= 30
+# 6. Keep biallelic sites (2 alleles)
+# 7. Write final SNP VCF + index
 
 
-vim "9.3_SortnIndexBCF.sh"
+vim "10.3_mtDNAfiltering.sh"
 #################################################################################################################################
-
 #!/bin/bash -l
-#SBATCH -J SortnIndexBCF
-#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/SortIndex_BCF_%A_%a.out
-#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/SortIndex_BCF_%A_%a.err
+#SBATCH -J BCFfilt2
 #SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/filt2_%A.out
+#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/filt2_%A.err
 #SBATCH -t 48:00:00
 #SBATCH -p small
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=64G
-#SBATCH --mail-type=START,FAIL,END
+#SBATCH --ntasks 8
+#SBATCH --mem=24G
+#SBATCH --mail-type=BEGIN,END,FAIL
 
-# Load bcftools (adjust to your cluster's module/env system)
+set -euo pipefail
+
+export PATH="/projappl/project_2009316/myenv/bin:$PATH"
 module load biokit
 
-#FIXED_BCF=/scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.bcf
+# create directory filt
+cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA/filt
 
-cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw
+THREADS=8
 
-# Sort file
-mkdir -p /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_bcftools
+BASE=/scratch/project_2009316/EuSamples
+VCFDIR="$BASE/07.VCF_mtDNA"
+FILT="$VCFDIR/filt"
+TMPDIR="$BASE/temp"
 
-bcftools sort \
-    -T /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_bcftools \
-    -Ob -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.sorted.bcf \
-    /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.bcf
+INPUT="$FILT/all_samples_mtDNA.norm.decomp.sorted.nophase.vcf.gz"
 
+cd "$FILT"
 
-#bcftools sort -Ob -o all_samples_raw.fixed.sorted.bcf all_samples_raw.fixed.bcf
+# 1. SnpGap filter
+# 2. Remove non-SNPs (TYPE != "snp")
+# 3. Read balance filter (RPL/RPR/SAF/SAR)
+# 4. Keep only PASS variants
+# 5. QUAL >= 30
+# 6. Keep biallelic sites (2 alleles)
+# 7. Write final SNP VCF + index
 
-# Index file
-bcftools index /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.sorted.bcf
+bcftools filter \
+    --threads "$THREADS" \
+    --SnpGap 2 \
+    -Ou -s+ \
+    "$INPUT" \
+  | bcftools filter \
+      --threads "$THREADS" \
+      -e 'TYPE!="snp"' \
+      -s NonSnp \
+      -Ou \
+  | bcftools filter \
+      --threads "$THREADS" \
+      -s Balance -m+ \
+      -i 'RPL>=1 && RPR>=1 && SAF>=1 && SAR>=1' \
+      -Ou \
+  | bcftools view \
+      --threads "$THREADS" \
+      -f PASS \
+      -Ou \
+  | bcftools filter \
+      --threads "$THREADS" \
+      --include 'QUAL>=30' \
+      -Ou \
+  | bcftools view \
+      --threads "$THREADS" \
+      --min-alleles 2 \
+      --max-alleles 2 \
+      -Oz \
+      -o all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
 
-# Count number of Variants per chromosome
-bcftools query -f '%CHROM\n' /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_raw.fixed.sorted.bcf \
-    | sort \
-    | uniq -c \
-    > /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/site_count_per_chromosome.tab
+bcftools index -t all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
+bcftools index -n all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
 
-## END
+#248 SNPs
 
-
-
-
-
-
-
-
-------------------------------------------------------------------------------------------------------
-
-
-####### SORTING, COMPRESSING, AND INDEXING #####
-#Now, we sort and compress the VCF file using sineractive
-sinteractive --account project_2009316 --mem 2000
-module load biokit
-cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA
-
-# In the next step we "Sort" and "compress" the VCF file in one step.
-bcftools sort -m 1G -Oz -o all_samples_mtDNA_raw.vcf.gz -T ./tmp_sort all_samples_mtDNA_raw.vcf
-
-# Index
-tabix -p vcf all_samples_mtDNA_raw.vcf.gz
-bcftools index -n all_samples_mtDNA_raw.vcf.gz
-
-#Extract the number of sites per mtDNA 
-gunzip -c all_samples_mtDNA_raw.vcf.gz | grep -v "^#" | cut -f 1 | uniq -c > site_count_per_mtDNA.tab
-#185
+#END
 
 
 ######### Create file for PopArt #########
