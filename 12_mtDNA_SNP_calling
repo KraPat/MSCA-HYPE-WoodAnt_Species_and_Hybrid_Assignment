@@ -88,6 +88,20 @@ BEGIN { FS = "\t" }
 ' all_samples_mtDNA_raw.vcf > malformed_records.txt
 
 
+--- NOTE: I did initially run this script, but then found a problem in the sorted VCF.gz file in MITO:85. I tried sorting and compressing again
+--- and the same error remained/occured. This is a header corruption or tag ID overflow issue. The tag ID -32768 is the minimum value of a
+--- signed 16-bit integer, which means a FORMAT tag index has overflowed — this is a known BCF internal encoding bug that can occur when:
+------ FreeBayes generates a VCF with many FORMAT tags that bcftools encodes into BCF format, causing the internal integer ID to overflow
+------ The BCF dictionary gets out of sync with the actual tag IDs during sort/compress
+------ A BCF-format intermediate file is being read back as if it were valid, but the header is malformed
+--- The problem is likely introduced when bcftools norm writes an intermediate BCF or re-encodes the file.
+--- The fix is to re-encode cleanly from the plain VCF and indexing the file, using
+bgzip -c /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.vcf \
+  > "$FILT/all_samples_mtDNA_raw.clean.vcf.gz"
+bcftools index -t "$FILT/all_samples_mtDNA_raw.clean.vcf.gz"
+--- I have done this below in the script "12.2_mtDNAfiltering.sh"
+--- I kept this for the sake of completeness here
+
 vim "12.1_SortnCompress.sh"
 #################################################################################################################################
 #!/bin/bash -l
@@ -131,7 +145,7 @@ rm -rf /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/tmp_vcftools
 
 ------------------------------------------
 
-vim "10.2_mtDNAfiltering.sh"
+vim "12.2_mtDNAfiltering.sh"
 #################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J BCFfilt1
@@ -161,6 +175,13 @@ REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
 
 mkdir -p "$FILT" "$TMPDIR"
 cd "$FILT"
+
+# Fix problem with VCF file
+# Re-encode cleanly from plain VCF
+bgzip -c /scratch/project_2009316/EuSamples/07.VCF_mtDNA/raw/all_samples_mtDNA_raw.vcf \
+  > "$VCFDIR/raw/all_samples_mtDNA_raw.clean.vcf.gz"
+
+bcftools index -t "$VCFDIR/raw/all_samples_mtDNA_raw.clean.vcf.gz"
 
 # 1. Normalize (including multiallelic splitting) in BCF and convert convert to VCF text for vcfwave
 # 2. Decompose alleles (atomize) and sort and save as VCF.gz
@@ -204,7 +225,7 @@ bcftools index -t all_samples_mtDNA.norm.decomp.sorted.nophase.vcf.gz
 # 7. Write final SNP VCF + index
 
 
-vim "10.3_mtDNAfiltering.sh"
+vim "12.3_mtDNAfiltering.sh"
 #################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J BCFfilt2
@@ -277,9 +298,10 @@ bcftools filter \
 bcftools index -t all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
 bcftools index -n all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
 
-#248 SNPs
+#294 SNPs
 
 #END
+--- NOTE: This was the last step of the mtDNA filtering. In the end, we have 294 SNPs
 
 
 ######### Create file for PopArt #########
