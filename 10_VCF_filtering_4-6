@@ -3,7 +3,7 @@
 # Second (10.5_BCFfiltering.sh), we merge newly DP‑filtered VCF files into a single file, then do further HWE testing and HWE filtering.
 # Lastly (10.6_BCFfiltering.sh), we delete old files
 
-vim "10.4_BCFfiltering.sh"
+vim "10.4_BCFfiltering_IndDepth.sh"
 #per‑individual depth filtering based on sample‑specific max DP, and constant min DP.
 #################################################################################################################################
 #!/bin/bash -l
@@ -60,7 +60,7 @@ bcftools index -t "${ind}.vcf.gz"
 #END
 
 
-vim "10.5_BCFfiltering.sh"
+vim "10.5_BCFfiltering_HWEfilt.sh"
 # HWE testing and HWE filtering
 #################################################################################################################################
 #!/bin/bash -l
