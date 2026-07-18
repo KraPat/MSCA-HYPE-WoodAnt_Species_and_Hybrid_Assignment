@@ -247,7 +247,6 @@ bcftools stats all_samples_DP8.AN10.XXInds_noChrom03.vcf.gz  > all_samples_DP8.A
 
 vim "10.9_VCFfiltering_Thin.sh"
 #################################################################################################################################
-
 #!/bin/bash -l
 #SBATCH -J filter_mac_thin
 #SBATCH --account=project_2009316
@@ -259,6 +258,7 @@ vim "10.9_VCFfiltering_Thin.sh"
 #SBATCH --mem=8G
 #SBATCH --mail-type=BEGIN,END,FAIL
 
+set -euo pipefail
 cd /scratch/project_2009316/EuSamples/06.VCF/filt
 module load biokit
 
@@ -295,7 +295,6 @@ bcftools index -t all_samples_DP8.AN10.XXInds_noChrom03.mac2.vcf.gz
     bcftools index -n all_samples_DP8.AN10.XXInds_noChrom03.mac2.vcf.gz
     echo
 } >> "$ThinningOutput"
-
 
 
 # --------------------------------
