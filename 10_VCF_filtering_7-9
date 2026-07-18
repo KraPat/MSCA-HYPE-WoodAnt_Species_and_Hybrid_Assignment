@@ -1,0 +1,280 @@
+## After filtering so far, we now filter the VCF further 
+## 7) based on minimum depth of 8x, and calcualte missing data per sample. This allows us to check if more than 50% or SNPs are missing in a sample.
+# We will exclude such samples.
+## 8) Then, we do a RE-filtering step based on the number the allelic number (AN) and the numer of missind data that we calculated in 7).
+## 9) Lastly, we filter for a minor allele count ≥ 2 across all samples and thin the VCF file.
+## This removes singletons (i.e. alleles seen only once), which are often noisy or uninformative for phylogenetic analyses) and thins the VCF file.
+
+
+vim "10.7_VCFfiltering_minDP.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J filt7_minDP
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/minDP_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/minDP_%a.err
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --ntasks 8
+#SBATCH --mem=12G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+export PATH="/projappl/project_2009316/myenv/bin:$PATH"
+module load biokit
+
+# create directory filt 
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+TMPDIR=/scratch/project_2009316/EuSamples/temp
+
+
+##
+## Min DP filtering  ---------------------------------------------------------------------------
+##
+# DP 8
+dpmin=8
+bcftools filter --threads 4 -i "FORMAT/DP>=${dpmin}" --set-GTs . -Oz all_samples.SNPQ30.biall.fixedHeader.indDP.hwe.vcf.gz > all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
+bcftools index -t all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
+
+
+
+##
+## Filter based on missing data ----------------------------------------------------------------
+## 
+
+### FILTERING BASED ON ALLELIC NUMBER (AN)
+# EXAMPLE
+# 103 diploid samples = 206 alleles expected
+# 10% missing data: 10% from 206 = 20.6
+# 206-20.6 = 185,4, ~186 alleles min.    
+
+# 385 diploid samples = 770 alleles expected
+# 10% missing datafrom 770 = 77. 770 - 70 = 700 alleles min.
+
+# DP8
+inputfile=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
+bcftools view --threads 4 -Oz -i 'AN >= 700' ${inputfile} > ${inputfile%.vcf.gz}.AN10percMiss.vcf.gz
+
+
+# Index VCFs, count number of sites left overall & percentage of missing data
+for i in *percMiss.vcf.gz ; do
+  echo $i ;
+  bcftools index -ft $i
+  bcftools index -n $i
+  vcftools --gzvcf ${i} --missing-indv --out ${i%.vcf.gz}
+done
+
+## End script
+######################################################## 
+
+
+--------------------------------------------------------
+## Now, before running the next script, we check the VCF file for missingness and filter based on missing data
+
+###### Check files before next script
+## Now, we need to have a look at the "XY...AN10percMiss.imiss" file .
+## Open the file on cluster (less FILE) or locally on your machine. Multiply the the column "F_Miss" with 100 to get the percentages of missing data (%)
+## Mark/Note samples with more than 50% of missing data.
+## After filtering for depth (DP; see 10.7), we now remove individuals with more than 50% missing data. Then we filter by allelic number.
+## We do that by re-filtering the VCF. In case no indidivual was excluded, this step is not needed.
+
+## We identified XX individuals with more than 50% missing data, lised below
+## We are now storing them in the file
+"removeInds.list"
+vim removeInds.list
+# Note, the names must be the same as in the VCF file.
+# Per line, one sample that needs to be remove
+
+#VCF1=all_samples.normalized.SnpGap_2.NonSNP.Balance.PASS.decomposed.SNPQ30.biall.fixedHeader.minDP8.hwe.vcf.gz
+#VCF2=all_samples.normalized.SnpGap_2.NonSNP.Balance.PASS.decomposed.SNPQ30.biall.fixedHeader.minDP8.hwe.37inds.vcf.gz
+#VCF3=all_samples.normalized.SnpGap_2.NonSNP.Balance.PASS.decomposed.SNPQ30.biall.fixedHeader.minDP8.hwe.37inds.AN10percMiss.vcf.gz
+
+vim "10.8_VCFfiltering_MissDataFilt.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J filt_MissData
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filt_MissDat_@.out  #CHANGE number of samples
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filt_MissDat_@a.err  #CHANGE number of samples
+#SBATCH -t 04:00:00
+#SBATCH -p small
+#SBATCH --ntasks 4
+#SBATCH --mem=8G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+module load biokit
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+
+# Similar as above, after excluding X number of samples, we filter again based on the NEW allelic number after filtering for dat missingness.
+## NOTE, calculate and change based on the number of samples
+# XX samples = 74 alleles expected
+# 10% missing data of XX = 7.4. XX - XY = XY alleles min
+# Define variable
+
+# --------------------------
+# Parameters
+# --------------------------
+NoAlleles=XX        # minimum AN threshold, change accordinly
+FilterData_Output="FilterData_Output.txt"
+
+# Start log file
+echo "=== Filtering log ===" > "$FilterData_Output"
+echo "VCF1: $VCF1" >> "$FilterData_Output"
+echo "VCF2: $VCF2" >> "$FilterData_Output"
+echo "VCF3: $VCF3" >> "$FilterData_Output"
+echo "NoAlleles (AN threshold): $NoAlleles" >> "$FilterData_Output"
+echo >> "$FilterData_Output"
+
+# --------------------------
+# Input / output VCF files
+# --------------------------
+VCF1=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
+VCF2=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.XXXinds.vcf.gz
+VCF3=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.XXXinds.AN10percMiss.vcf.gz
+
+# --------------------------
+# 1. Filter out individuals
+# --------------------------
+echo "Step 1: Removing individuals listed in removeInds.list" >> "$FilterData_Output"
+
+# vcftools writes a lot to stderr; capture that into the log
+vcftools --gzvcf "$VCF1" \
+         --remove removeInds.list \
+         --recode --recode-INFO-all \
+         --stdout | bgzip > "$VCF2"
+
+# Index VCF2
+bcftools index -t "$VCF2"
+
+{
+    echo "number of inds (should be XX)..."
+    bcftools query -l "$VCF2" | wc -l
+
+    echo "number of variants (should be 3,662,669)..."
+    bcftools index -n "$VCF2"
+} >> "$FilterData_Output"
+
+echo >> "$FilterData_Output"
+
+# --------------------------
+# 2. Filter on allelic number (AN) and inde
+# --------------------------
+echo "Step 2: Filtering sites with AN >= $NoAlleles" >> "$FilterData_Output"
+
+# Filter and index VCF3
+bcftools view --threads 4 -Oz -i "AN >= ${NoAlleles}" "$VCF2" > "$VCF3"
+bcftools index -t "$VCF3" 
+
+{
+    echo "number of variants after AN filtering..."
+    bcftools index -n "$VCF3"
+} >> "$FilterData_Output"
+
+echo "Filtering finished." >> "$FilterData_Output"
+
+-----
+## Above, we identified X samples to exclude
+#filter out individuals 
+#vcftools --gzvcf $VCF1 --remove removeInds.list --recode --recode-INFO-all --stdout | bgzip > $VCF2
+
+#bcftools index -t $VCF2
+#echo "number of inds when should be XX..."
+#bcftools query -l $VCF2 | wc -l
+#echo "number of variants when should be 3,662,669..."
+#bcftools index -n $VCF2
+
+#Filter on allelic number (AN)
+#bcftools view --threads 4 -Oz -i 'AN >= 67' $VCF2 > $VCF3
+
+bcftools index -t $VCF3
+echo "number of variants after AN filtering..."
+bcftools index -n $VCF3
+
+###END.
+
+-------------------
+## OUTPUT
+#number of inds when should be 37...
+#37
+#number of variants kept out of possible  sites ..
+#3,026,703
+#number of variants after AN filtering...
+#1,262,902
+
+
+###############################################################################    STEP 5) Filter ##########################
+## In the next step, we will exclude Scaffold03, in which the social chromosome is present. We also indicate this in the filename.
+## Later, we may also want to exclude Scaffold00, which is a fake scaffold to which sequences are aligned that do not fit other scaffolds. 
+## We will use siteractive to exclude scaffold 03.
+## Then, we will run a script for thinning the vcf file.
+
+sinteractive --account project_2009316 --mem 8000
+cd /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF/filt
+module load biokit
+
+VCFIN=all_samples.normalized.SnpGap_2.NonSNP.Balance.PASS.decomposed.SNPQ30.biall.fixedHeader.minDP8.hwe.37inds.vcf.gz
+
+## The code below now excludes "Scaffold03" and then indexes the VCF file
+vcftools --gzvcf $VCFIN --not-chr Scaffold03 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.noScaff03.vcf.gz      
+bcftools index -t all_samples_DP8.AN10.noScaff03.vcf.gz
+
+## The code below now excludes "Scaffold003" and then indexes the VCF file
+VCFIN=all_samples_DP8.AN10.noScaff03.vcf.gz   
+vcftools --gzvcf $VCFIN --not-chr Scaffold00 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.noScaff0003.vcf.gz      
+bcftools index -t all_samples_DP8.AN10.noScaff0003.vcf.gz
+## Note, you could also exclude both at the same time by using the code "vcftools --gzvcf $VCFIN --not-chr Scaffold00 --not-chr Scaffold03 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.noScaff0003.vcf.gz"
+exit #to exit sinteractive
+
+## To check if this worked, you can run the code below
+bcftools stats all_samples_DP8.AN10.noScaff03.vcf.gz | grep "Scaffold03"
+bcftools stats all_samples_DP8.AN10.noScaff0003.vcf.gz | grep "Scaffold00"
+# There should be no output (zero variants)! It is still present in the header though!
+
+
+## Note, this VCF file cannot be directly used for analyses but needs to undergo a few more thinning steps, see below.
+
+
+################################### Beginning script 5, called "10f_filter_mac_thin.sh"
+
+#!/bin/bash -l
+#SBATCH -J filter_mac_thin
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF/logs/filter_mac_thin.out
+#SBATCH -e /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF/logs/filter_mac_thin.err
+#SBATCH -t 04:00:00
+#SBATCH -p small
+#SBATCH --ntasks 4
+#SBATCH --mem=8G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+cd /scratch/project_2009316/DutchSamples/X204SC23115958-Z01-F008/06.VCF/filt
+module load biokit
+
+# First, we select only 2-allelic SNPS
+vcftools --gzvcf all_samples_DP8.AN10.noScaff0003.vcf.gz --mac 2 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.noScaff0003.mac2.vcf.gz       
+bcftools index -t all_samples_DP8.AN10.noScaff0003.mac2.vcf.gz 
+echo "number of variants in all_samples_DP8.AN10.noScaff0003.mac2.vcf.gz..."
+bcftools index -n all_samples_DP8.AN10.noScaff0003.mac2.vcf.gz 
+
+## Second, we thin with 20kb windows
+vcftools --gzvcf all_samples_DP8.AN10.noScaff0003.mac2.vcf.gz --thin 20000 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.noScaff0003.mac2.thin20kb.vcf.gz       
+bcftools index -t all_samples_DP8.AN10.noScaff0003.mac2.thin20kb.vcf.gz
+echo "number of variants in all_samples_DP8.AN10.noScaff0003.mac2.thin20kb.vcf.gz..."
+bcftools index -n all_samples_DP8.AN10.noScaff0003.mac2.thin20kb.vcf.gz
+
+## Here, we thin for the NJtree using 1kb windows
+vcftools --gzvcf all_samples_DP8.AN10.noScaff0003.mac2.vcf.gz --thin 1000 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.noScaff0003.mac2.thin1kb.vcf.gz       
+bcftools index -t all_samples_DP8.AN10.noScaff0003.mac2.thin1kb.vcf.gz  
+echo "number of variants in all_samples_DP8.AN10.noScaff0003.mac2.thin1kb.vcf.gz  ..."
+bcftools index -n all_samples_DP8.AN10.noScaff0003.mac2.thin1kb.vcf.gz  
+
+###END.
+
+## OUTPUT
+#Number of variants in all_samples_DP8.AN10.noScaff0003.mac2.vcf.gz...
+#2,027,775
+#number of variants in all_samples_DP8.AN10.noScaff0003.mac2.thin20kb.vcf.gz...
+#9,927
+#number of variants in all_samples_DP8.AN10.noScaff0003.mac2.thin1kb.vcf.gz  ...
+#177,099
