@@ -1,0 +1,66 @@
+## After filtering so far, we now filter the VCF further 
+## 7) based on minimum depth of 8x, and based on missing data.
+## 8) Then, we do a RE-filtering step based on the number of samples and the allelic number (AN) that may have been exlcuded in 7).
+## 9) Lastly, we filter for a minor allele count ≥ 2 across all samples and thin the VCF file.
+## This removes singletons (i.e. alleles seen only once), which are often noisy or uninformative for phylogenetic analyses) and thins the VCF file.
+
+
+vim "10.7.1_VCFfiltering_minDP.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J filt7_minDP
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/minDP_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/minDP_%a.err
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --ntasks 8
+#SBATCH --mem=12G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+export PATH="/projappl/project_2009316/myenv/bin:$PATH"
+module load biokit
+
+# create directory filt 
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+TMPDIR=/scratch/project_2009316/EuSamples/temp
+
+
+##
+## Min DP filtering  ---------------------------------------------------------------------------
+##
+# DP 8
+dpmin=8
+bcftools filter --threads 4 -i "FORMAT/DP>=${dpmin}" --set-GTs . -Oz all_samples.SNPQ30.biall.fixedHeader.indDP.hwe.vcf.gz > all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
+bcftools index -t all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
+
+
+
+##
+## Filter based on missing data ----------------------------------------------------------------
+## 
+
+### FILTERING BASED ON ALLELIC NUMBER (AN)
+# EXAMPLE
+# 103 diploid samples = 206 alleles expected
+# 10% missing data: 10% from 206 = 20.6
+# 206-20.6 = 185,4, ~186 alleles min.    
+
+# 385 diploid samples = 770 alleles expected
+# 10% missing datafrom 770 = 77. 770 - 70 = 700 alleles min.
+
+# DP8
+inputfile=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
+bcftools view --threads 4 -Oz -i 'AN >= 700' ${inputfile} > ${inputfile%.vcf.gz}.AN10percMiss.vcf.gz
+
+
+# Index VCFs, count number of sites left overall & percentage of missing data
+for i in *percMiss.vcf.gz ; do
+  echo $i ;
+  bcftools index -ft $i
+  bcftools index -n $i
+  vcftools --gzvcf ${i} --missing-indv --out ${i%.vcf.gz}
+done
+
+## End script
+######################################################## 
