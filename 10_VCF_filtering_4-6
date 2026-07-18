@@ -1,7 +1,9 @@
-# Until now, we have filtered the VCF file. So first (10.4_BCFfiltering.sh), we do per‑individual depth filtering based on sample‑specific max DP, and constant min DP.
-# So for each individual, we create a VCF for which the genotypes are set to "." where DP is outside [dpmin, dpmax) and index them
+# Until now, we have filtered the VCF file. So first (10.4_BCFfiltering.sh), we do per‑individual depth filtering based on sample‑specific max DP,
+# and constant min DP. So for each individual, we create a VCF for which the genotypes are set to ".",
+# where DP is outside [dpmin, dpmax) and index them
 # Second (10.5_BCFfiltering.sh), we merge newly DP‑filtered VCF files into a single file, then do further HWE testing and HWE filtering.
 # Lastly (10.6_BCFfiltering.sh), we delete old files
+# Then, we continue with further filtering on minimum depth per sample and based on missing data (10_VCF_filtering_7-XX).
 
 vim "10.4_BCFfiltering_IndDepth.sh"
 #per‑individual depth filtering based on sample‑specific max DP, and constant min DP.
