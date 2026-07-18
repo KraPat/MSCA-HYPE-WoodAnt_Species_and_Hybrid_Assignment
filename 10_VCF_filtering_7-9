@@ -26,27 +26,24 @@ module load biokit
 cd /scratch/project_2009316/EuSamples/06.VCF/filt
 TMPDIR=/scratch/project_2009316/EuSamples/temp
 
-
-##
-## Min DP filtering  ---------------------------------------------------------------------------
-##
+## --------------------------------
+## Min DP filtering  
+## --------------------------------
 # DP 8
 dpmin=8
 bcftools filter --threads 4 -i "FORMAT/DP>=${dpmin}" --set-GTs . -Oz all_samples.SNPQ30.biall.fixedHeader.indDP.hwe.vcf.gz > all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
 bcftools index -t all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
 
-
-
-##
-## Filter based on missing data ----------------------------------------------------------------
-## 
-
+## --------------------------------
+## Filter based on missing data 
+## --------------------------------
 ### FILTERING BASED ON ALLELIC NUMBER (AN)
 # EXAMPLE
 # 103 diploid samples = 206 alleles expected
 # 10% missing data: 10% from 206 = 20.6
 # 206-20.6 = 185,4, ~186 alleles min.    
 
+# Actual data
 # 385 diploid samples = 770 alleles expected
 # 10% missing datafrom 770 = 77. 770 - 70 = 700 alleles min.
 
