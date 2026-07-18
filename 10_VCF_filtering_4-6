@@ -4,6 +4,7 @@
 # Lastly (10.6_BCFfiltering.sh), we delete old files
 
 vim "10.4_BCFfiltering.sh"
+#per‑individual depth filtering based on sample‑specific max DP, and constant min DP.
 #################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J splitDP
@@ -60,6 +61,7 @@ bcftools index -t "${ind}.vcf.gz"
 
 
 vim "10.5_BCFfiltering.sh"
+# HWE testing and HWE filtering
 #################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J filt3_HWE
@@ -159,3 +161,31 @@ bcftools index -t all_samples.SNPQ30.biall.fixedHeader.indDP.hwe.vcf.gz
 
 ## END
 
+vim "10.6_BCFfiltering_CleanUp.sh"
+# Remove files
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J cleanup_indDP
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/cleanup_indDP.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/cleanup_indDP.err
+#SBATCH -t 2:00:00
+#SBATCH -p small
+#SBATCH --ntasks=1
+#SBATCH --mem=2G
+
+set -euo pipefail
+
+BASE=/scratch/project_2009316/EuSamples
+VCFDIR="$BASE/06.VCF"
+FILT="$VCFDIR/filt"
+
+cd "$FILT/individualDP"
+
+echo "Deleting per-individual DP-filtered VCFs..."
+find . -type f -name "*.vcf.gz" -delete
+find . -type f -name "*.tbi"    -delete
+find . -type d -empty -delete
+echo "Done."
+
+#END
