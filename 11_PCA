@@ -1,0 +1,189 @@
+## Below, we use the VCF file generated in the previous steps to conduct a PCA with plink software.
+## IF there are 50 samples or more in the VCF file, we can use plink (using sinteractive) to create a PCA. 
+## IF not, we need to use "SNPRelated" in R on the cluster to create the PCA.
+## At the end, we download the data to our local machine using "scp" and work on the local machine.
+## Note, we will use the 20kb-windoe-thinned file for the PCA, which has XXX SNPs.
+
+
+## Before we start, we need to create a folder "pca" in /scratch/project_2009316/EuSamples/06.VCF
+/scratch/project_2009316/EuSamples/06.VCF
+mkdir pcf
+
+############  CLUSTER script ###############################################################
+## SCRIPT start sinteractive
+
+sinteractive --account project_2009316 --mem 3000
+module load biokit
+module load plink
+
+cd /scratch/project_2009316/EuSamples/06.VCF/pca
+OUTPATH=/scratch/project_2009316/EuSamples/06.VCF/pca
+
+# Path to the filtered VCF (incl chromosome 03 excluded, 20 kb thinning)
+VCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noCAXY.mac2.thin20kb.vcf.gz
+
+# Run PCA with PLINK 
+#plink --threads 1 \
+#      --vcf $VCF \
+#      --double-id \
+#      --allow-extra-chr \
+#      --set-missing-var-ids @:# \
+#      --pca header var-wts \
+#      --out $OUTPATH/all_samples_DP8_PCA
+
+## Below, all in a single line
+plink --threads 1 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --pca header var-wts --out $OUTPATH/all_samples_DP8_PCA
+
+#plink2 \
+#    --threads 1 \
+#    --vcf $VCF \
+#    --double-id \
+#    --allow-extra-chr \
+#    --set-missing-var-ids @:# \
+#    --pca 20 approx \
+#    --out $OUTPATH/all_samples_DP8_PCA
+#too small sample size - need at least 50
+##Below, all in a single line
+plink2 --threads 1 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --pca 20 approx --out $OUTPATH/all_samples_DP8_PCA
+
+##### IF WE WANT TO USE PLINK2, WE CAN ALSO CALCULATE ALLELE FREUQUENCIES DIRECTLY
+## We can also calculate allele frequencies using plink2, below as code and one liner
+#plink2 \
+#  --vcf $VCF \
+#  --double-id \
+#  --allow-extra-chr \
+#  --set-missing-var-ids @:# \
+#  --freq \
+#  --out $OUTPATH/all_samples_DP8_freq
+
+#Oneliner
+plink2 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --freq --out $OUTPATH/all_samples_DP8_freq
+
+## This produces the file "all_samples_DP8_freq.afreq". Now, we can run the code below to calculate the PCA
+# --pca extracts the top 20 principal components 
+plink2 \
+  --threads 1 \
+  --vcf $VCF \
+  --double-id \
+  --allow-extra-chr \
+  --set-missing-var-ids @:# \
+  --read-freq $OUTPATH/all_samples_DP8_freq.afreq \
+  --pca 20 approx \
+  --out $OUTPATH/all_samples_DP8_PCA
+
+
+## Oneliner below
+plink2 --threads 1 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --read-freq $OUTPATH/all_samples_DP8_freq.afreq --pca 20 approx --out $OUTPATH/all_samples_DP8_PCA
+#There is then a note that "Warning: "--pca approx" is only recommended for analysis of >5000 samples". We have only 37 samples, but let's give it a try.
+
+exit
+# to exit sinteractive
+
+
+-------------
+############ PLINK R PCA ####################
+## Now, we download all the data to our local machine and plot it in R locally
+## Download
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/pca/* .
+
+## Now, open in R and plot it there. The code below is for consistency presented here but run locally.
+#Specifically, we will use the "eigenvec" file and the "species name" in that file as well as the PC1, PC2, PC3, PC4 (principal componen).
+
+#### Plotting PLINK2 files in R ####
+###---###---###---###---###---###---###---###---###---###
+# PCA ####
+###---###---###---###---###---###---###---###---###---###
+library("ggplot2")
+setwd("C:/.../.../PCA/")
+
+## With preliminary results ####
+### 374 inds ####
+PCA_vec <- read.csv("./all_samples_DP8_PCA.eigenvec", sep="\t", header=T)
+load <- PCA_vec[,3:4]  ##this loads the PC1 and PC2, change here for PC3 and PC4
+pc_scores_df <- data.frame(PC1 = PCA_vec[, 3], PC2 = PCA_vec[, 4], Species = PCA_vec$X.FID) 
+# above, we combine the data in data-frame "pc_scores_df" and plot below
+
+#Plot data
+ggplot(pc_scores_df, aes(x = PC1, y = PC2, color = Species)) + #, 
+  geom_point(size=3) +
+  labs(title = "PCA of Formica samples") +
+  #stat_ellipse(level = 0.95, size=1) +  #
+  theme(plot.title = element_text(size=20),
+        legend.position="none",
+        axis.title.x = element_text(size=13),
+        axis.text.x  = element_text(size=11, color="black"),
+        axis.title.y = element_text(size=13),
+        axis.text.y  = element_text(size=11, color="black"),
+        panel.grid.minor.x = element_blank())
+## Note: If you see one or two VERY distant samples driving the whole PCA, you probably have sequenced other Formica species, e.g. F. exsecta, F. sanguinea, F. truncorum. If you see one slightly distant cloud only, this is likely F. pratensis. 
+# You see different colors that represent the different IDs but are not yet the species names. We have to define them in a text or Excel file and load them to make this more easy to read.
+
+#Now, check species ID and add them to Excel-file, which is then loaded into R
+PCA_vec <- readxl::read_xlsx("./all_samples_DP8_PCA.xlsx", sheet="species")
+table(PCA_vec$ID_short)
+head(PCA_vec)
+
+#Plot PCA again with PC1 and PC2
+pdf("DutchSamples_PC12_20251223.pdf")
+png("DutchSamples_PC12_20251223.png", res=300, width = 3000, height = 3000)
+ggplot(PCA_vec, aes(x = PC1, y = PC2, col=Species, label=ID_short)) + #, 
+  geom_point(size=3) +
+  #labs(title = "PCA of Formica samples") +
+  scale_color_manual(name="Species",
+                     labels=c(expression(italic("F. aquilonia")),
+                              expression(italic("F. lugubris")),
+                              expression(italic("F. polyctena")),
+                              expression(italic("F. pratensis")),
+                              expression(italic("F. rufa")),
+                              "Hybrid", "Hybrid2", "NA"),  
+                     values=c("darkgreen", "lightgreen",
+                              "#d3c055",  "blue",
+                              "darkorange", 
+                              "#a072d5", "#d6461f", "black"))+ ##d6461f "#e7b727",
+  #stat_ellipse(level = 0.95, size=1) +  #
+  xlab(paste0("PC1 (", signif(percentages[1], 3), "%)")) + ylab(paste0("PC2 (", signif(percentages[3], 3), "%)")) +
+  geom_text(vjust = -0.7, size = 3) +
+  theme_bw() +#
+  theme(plot.title = element_text(size=20),
+        #legend.position="none",
+        axis.title.x = element_text(size=13),
+        axis.text.x  = element_text(size=11, color="black"),
+        axis.title.y = element_text(size=13),
+        axis.text.y  = element_text(size=11, color="black"),
+        panel.grid.minor.x = element_blank())
+dev.off()
+
+
+#Now, PC1-3
+pdf("DutchSamples_PC13_20251223.pdf")
+png("DutchSamples_PC13_20251223.png", res=300, width = 3000, height = 3000)
+ggplot(PCA_vec, aes(x = PC1, y = PC3, col=Species, label=ID_short)) + #, 
+  geom_point(size=3) +
+  #labs(title = "PCA of Formica samples") +
+  scale_color_manual(name="Species",
+                     labels=c(expression(italic("F. aquilonia")),
+                              expression(italic("F. lugubris")),
+                              expression(italic("F. polyctena")),
+                              expression(italic("F. pratensis")),
+                              expression(italic("F. rufa")),
+                              "Hybrid", "Hybrid2", "NA"),  
+                     values=c("darkgreen", "lightgreen",
+                              "#d3c055",  "blue",
+                              "darkorange", 
+                              "#a072d5", "#d6461f", "black"))+ ##d6461f "#e7b727",
+  #stat_ellipse(level = 0.95, size=1) +  #
+  xlab(paste0("PC1 (", signif(percentages[1], 3), "%)")) + ylab(paste0("PC3 (", signif(percentages[3], 3), "%)")) +
+  geom_text(vjust = -0.7, size = 3) +
+  theme_bw() +#
+  theme(plot.title = element_text(size=20),
+        #legend.position="none",
+        axis.title.x = element_text(size=13),
+        axis.text.x  = element_text(size=11, color="black"),
+        axis.title.y = element_text(size=13),
+        axis.text.y  = element_text(size=11, color="black"),
+        panel.grid.minor.x = element_blank())
+dev.off()
+
+
+
+
