@@ -223,9 +223,21 @@ vim FilterData_Output
 We will use siteractive to exclude them.
 ## Then, we will run a script to thin the vcf file.
 
-#######################################################################
-sinteractive --account project_2009316 --mem 8000
-cd /scratch/project_2009316/EuSamples06.VCF/filt
+vim 10.8.1_KeepChroms.sh
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J filt_KeepChromosome
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/keepChroms_%a.out  #CHANGE number of samples
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/keepChroms_%a.err  #CHANGE number of samples
+#SBATCH -t 06:00:00
+#SBATCH -p small
+#SBATCH --ntasks 4
+#SBATCH --mem=12G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+#sinteractive --account project_2009316 --mem 8000
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
 module load biokit
 
 VCFIN=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.376inds.AN10percMiss.vcf.gz
@@ -238,7 +250,7 @@ bcftools index -t all_samples_DP8.AN10.376Inds_noCAXY.vcf.gz
 vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.vcf.gz --not-chr chromosome_3 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noChrom03.vcf.gz      
 bcftools index -t all_samples_DP8.AN10.376Inds_noChrom03.vcf.gz 
 
-exit 
+#exit 
 #to exit sinteractive
 
 ## To check if this worked, you can run the code below
@@ -249,6 +261,9 @@ bcftools stats all_samples_DP8.AN10.376Inds_noChrom03.vcf.gz | grep "chromosome_
 bcftools stats all_samples_DP8.AN10.376Inds_noCAXY.vcf.gz  > all_samples_DP8.AN10.376Inds_noCAXY.vcf.stats
 bcftools stats all_samples_DP8.AN10.376Inds_noChrom03.vcf.gz  > all_samples_DP8.AN10.376Inds_noChrom03.vcf.stats
 
+# END
+
+----
 ## Note, this VCF file cannot be directly used for analyses but needs to undergo a few more thinning steps to reduce LD, see below.
 ## But this is the last step now
 
