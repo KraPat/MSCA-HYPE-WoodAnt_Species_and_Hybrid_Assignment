@@ -35,9 +35,6 @@ set -euo pipefail
 export PATH="/projappl/project_2009316/myenv/bin:$PATH"
 module load biokit
 
-# create directory filt
-cd /scratch/project_2009316/EuSamples/06.VCF/filt_allVars
-
 THREADS=8
 
 BASE=/scratch/project_2009316/EuSamples
@@ -93,13 +90,13 @@ bcftools view -H all_samples.norm.dec.sorted.nophase.SNPQ30.vcf.gz | wc -l
 # Next, we prep the data for maximum depth filtering (DP). Specifically, we fix the header (otherwise downstream errors), 
 # calculate missingness, depth, DP thresholds, sample list.
 
-vim "10.3_BCFfiltering.sh"
+vim "11.3_VCFfiltering.sh"
 #################################################################################################################################
 #!/bin/bash -l
-#SBATCH -J BCFfilt3
+#SBATCH -J VCFfilt3
 #SBATCH --account=project_2009316
-#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filt3_%A.out
-#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filt3_%A.err
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/VCFfilt3_%A.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/VCFfilt3_%A.err
 #SBATCH -t 24:00:00
 #SBATCH -p small
 #SBATCH --ntasks 8
@@ -180,7 +177,7 @@ Rscript minMaxDP.R
 # -> ${BASENAME}.fixedHeader.idepth.MinMax
 
 # Below is the r-script. Change names accordinly before using!
-# dat = read.table("all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth", h = T)
+# dat = read.table("all_samples.norm.dec.sor.nopha.SNPQ30.fixedHeader.idepth", h = T)
 # dat$MIN_DEPTH = round((dat$MEAN_DEPTH-.5)/2) # min depth is half of mean depth
 # dat$MAX_DEPTH = round((dat$MEAN_DEPTH)*2) # max depth is twice mean depth
 # write.table(dat, "all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth.MinMax", col.names = T, row.names = F, quote = F, sep = "\t")
