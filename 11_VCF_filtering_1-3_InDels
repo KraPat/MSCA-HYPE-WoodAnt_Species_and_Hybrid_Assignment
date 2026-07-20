@@ -90,7 +90,7 @@ bcftools view -H all_samples.norm.dec.sorted.nophase.SNPQ30.vcf.gz | wc -l
 # Next, we prep the data for maximum depth filtering (DP). Specifically, we fix the header (otherwise downstream errors), 
 # calculate missingness, depth, DP thresholds, sample list.
 
-vim "11.3_VCFfiltering.sh"
+vim 11.3_VCFfiltering.sh
 #################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J VCFfilt3
