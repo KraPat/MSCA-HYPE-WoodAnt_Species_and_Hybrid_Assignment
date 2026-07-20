@@ -1,0 +1,280 @@
+Now, we have the VCF file and will do some filtering steps.
+
+vim "11.1_VCFfiltering_InDel.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J VCFfilt1
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/VCFfilt1_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/VCFfilt1_%A_%a.err
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --ntasks 8
+#SBATCH --mem=24G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+export PATH="/projappl/project_2009316/myenv/bin:$PATH"
+#module load biokit
+module load samtools/1.21
+
+# create directory filt
+cd /scratch/project_2009316/EuSamples/06.VCF/filt_allVars
+
+THREADS=8
+
+BASE=/scratch/project_2009316/EuSamples
+VCFDIR="$BASE/06.VCF"
+RAW="$VCFDIR/raw/all_samples_raw.fixed.sorted.bcf"
+FILT="$VCFDIR/filt_allVars"
+TMPDIR="$BASE/temp"
+REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
+
+mkdir -p "$FILT" "$TMPDIR"
+cd "$FILT"
+
+mkdir -p "$FILT" "$TMPDIR"
+cd "$FILT"
+
+# 1. Normalize (including multiallelic splitting) in BCF and convert convert to VCF text for vcfwave
+# 2. Decompose alleles (atomize) and sort and save as VCF.gz
+# 3. Strip phasing and patch missing genotype pattern (your existing sed logic)
+
+# 1. Normalize
+#bcftools norm -f "$REF" -m -both -O z -o $BASE/06.VCF/filt_allVars/all_samples.normalized.vcf.gz "$RAW"
+
+# 2. Decompose
+#bcftools norm \
+#  --atomize \
+#  -f "$REF" \
+#  -m -both \
+#  -O z \
+#  -o all_samples.norm.decomp.sorted.vcf.gz \
+#  all_samples.normalized.vcf.gz
+
+
+# 3. strip phasing
+# Apply your phasing removal & missing GT pattern fix
+# (same pattern as in your original script).
+
+#bcftools +setGT \
+#  all_samples.norm.decomp.sorted.vcf.gz \
+#  -Oz \
+#  -o all_samples.norm.decomp.sorted.nophase.vcf.gz \
+#  -- -n u -t .
+
+#bcftools index -t all_samples.norm.decomp.sorted.nophase.vcf.gz
+
+## END
+
+--------
+# Now, we conduct more filtering steps
+# 1. SnpGap filter
+# 2. NOT DONE - to keep all various data: SNPs, insertions, deletion,
+# 3. Read balance filter (RPL/RPR/SAF/SAR)
+# 4. Keep only PASS variants
+# 5. QUAL >= 30
+# 6. Keep biallelic sites (2 alleles)
+# 7. Write final SNP VCF + index
+
+
+vim "10.2_BCFfiltering.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J BCFfilt2
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filt2_%A.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filt2_%A.err
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --ntasks 8
+#SBATCH --mem=24G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+export PATH="/projappl/project_2009316/myenv/bin:$PATH"
+module load biokit
+
+# create directory filt
+cd /scratch/project_2009316/EuSamples/06.VCF/filt_allVars
+
+THREADS=8
+
+BASE=/scratch/project_2009316/EuSamples
+VCFDIR="$BASE/06.VCF"
+FILT="$VCFDIR/filt_allVars"
+TMPDIR="$BASE/temp"
+
+INPUT="$FILT/all_samples.norm.decomp.sorted.nophase.vcf.gz"
+
+cd "$FILT"
+
+# 1. SnpGap filter
+# 2. Remove non-SNPs (TYPE != "snp")
+# 3. Read balance filter (RPL/RPR/SAF/SAR)
+# 4. Keep only PASS variants
+# 5. QUAL >= 30
+# 6. Keep biallelic sites (2 alleles)
+# 7. Write final SNP VCF + index
+
+
+bcftools filter \
+    --threads "$THREADS" \
+    --SnpGap 2 \
+    -Ou -s+ \
+    "$INPUT" \
+  | bcftools filter \
+      --threads "$THREADS" \
+      -s Balance -m+ \
+      -i 'RPL>=1 && RPR>=1 && SAF>=1 && SAR>=1' \
+      -Ou \
+  | bcftools view \
+      --threads "$THREADS" \
+      -f PASS \
+      -Ou \
+  | bcftools filter \
+      --threads "$THREADS" \
+      --include 'QUAL>=30' \
+      -Ou \
+  | bcftools view \
+      --threads "$THREADS" \
+      -Oz \
+      -o all_samples.norm.dec.sorted.nophase.SNPQ30.vcf.gz
+
+bcftools index -t all_samples.norm.decomp.sorted.nophase.ALLQ30.vcf.gz
+bcftools index -n all_samples.norm.dec.sorted.nophase.SNPQ30.vcf.gz
+
+# Optional: quick count of  SNPs (sanity check)
+bcftools view -H all_samples.norm.dec.sorted.nophase.SNPQ30.vcf.gz | wc -l
+## has 
+# END
+
+
+--------------
+# Next, we prep the data for maximum depth filtering (DP). Specifically, we fix the header (otherwise downstream errors), 
+# calculate missingness, depth, DP thresholds, sample list.
+
+vim "10.3_BCFfiltering.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J BCFfilt3
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filt3_%A.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filt3_%A.err
+#SBATCH -t 24:00:00
+#SBATCH -p small
+#SBATCH --ntasks 8
+#SBATCH --mem=24G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+module load biokit
+module load r-env
+export PATH="/projappl/project_2009316/myenv/bin:$PATH"
+
+BASE=/scratch/project_2009316/EuSamples
+VCFDIR="$BASE/06.VCF"
+FILT="$VCFDIR/filt_allVars"
+TMPDIR="$BASE/temp"
+
+mkdir -p "$TMPDIR" "$FILT/logs"
+cd "$FILT"
+
+# --- Adjust BASENAME below to match your actual input filename ---
+BASENAME="all_samples.norm.dec.sorted.nophase.SNPQ30"
+INPUT_VCF="${BASENAME}.vcf.gz"
+
+echo "Using input VCF: $INPUT_VCF"
+
+##
+## 2.1.a. Correct/fix field IDs (AO, AD, QA, GL) in header
+##
+
+bcftools view -h "$INPUT_VCF" > header.vcf
+
+# Run perl below dirctly, if error is thrown with cluster
+#perl -npe 's/<ID=AO,Number=A/<ID=AO,Number=\./' header.vcf \
+#  | perl -npe 's/<ID=AD,Number=R/<ID=AD,Number=\./' \
+#  | perl -npe 's/<ID=QA,Number=A/<ID=QA,Number=\./' \
+#  | perl -npe 's/<ID=GL,Number=G/<ID=GL,Number=\./' \
+#  > header_AO_AD_QA_GL.vcf
+
+bcftools reheader \
+  -h header_AO_AD_QA_GL.vcf \
+  -o "${BASENAME}.fixedHeader.vcf.gz" \
+ "$INPUT_VCF"
+
+
+##
+## 2.1.a. Check missing data per individual
+##
+
+vcftools \
+  --gzvcf "${BASENAME}.fixedHeader.vcf.gz" \
+  --missing-indv \
+  --out "${BASENAME}.fixedHeader.MISSING_DATA"
+
+echo "Average missing data over all individuals (excluding F_):"
+cut -f5 "${BASENAME}.fixedHeader.MISSING_DATA.imiss" \
+  | grep -v 'F_' \
+  | awk '{sum+=$1} END{print sum/NR}'
+#Output:
+#Average missing data over all individuals (excluding F_):
+#0.0835339
+
+##
+## 2.1.b. Compute mean DP per individual
+##
+vcftools \
+  --depth \
+  --gzvcf "${BASENAME}.fixedHeader.vcf.gz" \
+  --out "${BASENAME}.fixedHeader"
+
+# This creates: ${BASENAME}.fixedHeader.idepth
+
+##
+## 2.1.c. Compute individual DP thresholds (Min/Max) in R
+##        (half and twice mean depth)
+##
+Rscript minMaxDP.R
+# -> ${BASENAME}.fixedHeader.idepth.MinMax
+
+# Below is the r-script. Change names accordinly before using!
+# dat = read.table("all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth", h = T)
+# dat$MIN_DEPTH = round((dat$MEAN_DEPTH-.5)/2) # min depth is half of mean depth
+# dat$MAX_DEPTH = round((dat$MEAN_DEPTH)*2) # max depth is twice mean depth
+# write.table(dat, "all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth.MinMax", col.names = T, row.names = F, quote = F, sep = "\t")
+
+----
+# Note, if this does not work on cluster, you have to download it and run it locally
+
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt_allVars/all_samples.norm.dec.sorted.nophase.SNPQ30.fixedHeader.idepth ./
+#scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt_allVars/minMaxDP.R ./
+
+## Run script in R
+## If you run the script on a local Windows machine, make sure that you check the resulting file for tabs, justification, etc
+
+## Upload file to cluter
+scp ./all_samples.norm.dec.sorted.nophase.SNPQ30.fixedHeader.idepth.MinMax krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt_allVars/all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth.MinMax
+### Create results folder
+mkdir logs
+mkdir individualDP
+
+----
+# Continue then with the bash script
+
+##
+## 2.1.d. Prepare folders and sample list
+##
+
+mkdir -p individualDP
+
+# List individuals in the fixed-header VCF
+bcftools query -l "${BASENAME}.fixedHeader.vcf.gz" > ind.list
+
+echo "Number of individuals: $(wc -l < ind.list)"
+
+## END
