@@ -119,7 +119,7 @@ FilterData_Output="FilterData_Output_wo_FsangFexs_noChrom3.txt"
 # Input / output VCF files
 # --------------------------
 VCF4=all_samples_DP8.AN10.376Inds_noChrom03.vcf.gz
-VCF5=aall_samples_DP8.AN10.376Inds_noChrom03.367inds.vcf.gz
+VCF5=all_samples_DP8.AN10.376Inds_noChrom03.367inds.vcf.gz
 VCF6=all_samples_DP8.AN10.376Inds_noChrom03.367inds.AN10percMiss.vcf.gz
 
 # Start log file
@@ -181,3 +181,114 @@ bcftools index -n $VCF6
 
 ###END.
 
+
+----
+## Note, these VCF files cannot be directly used for analyses but needs to undergo a few more thinning steps to reduce LD, see below.
+## But this is the last step now
+
+vim "13.2_VCFfiltering_Thin.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J filter_mac_thin2
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filter_mac_thin2.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filter_mac_thin2.err
+#SBATCH -t 04:00:00
+#SBATCH -p small
+#SBATCH --ntasks 4
+#SBATCH --mem=8G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+module load biokit
+
+# --------------------------------
+# Log file for thinning (echo + counts only)
+# --------------------------------
+ThinningOutput="ThinningOutput"
+
+echo "=== Thinning / MAC filtering log ===" > "$ThinningOutput"
+echo "Working directory: $(pwd)" >> "$ThinningOutput"
+echo >> "$ThinningOutput"
+
+# --------------------------------
+# First: MAC=2 for full VCF
+# --------------------------------
+# First, we select only 2-allelic SNPS for the full VCF file
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.367inds.vcf.gz --mac 2 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.vcf.gz..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+# We do the same for the VCF withouth chromosome 3
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noChrom03.367inds.vcf.gz --mac 2 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.vcf.gz ..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+
+# --------------------------------
+# Second: thin with 20 kb windows
+# --------------------------------
+## Second, we thin with 20kb windows for the full VCF ...
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.vcf.gz --thin 20000 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.thin20kb.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.thin20kb.vcf.gz        
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.thin20kb.vcf.gz ..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.thin20kb.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+... and the VCF w/o chromosome 3
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.vcf.gz --thin 20000 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.thin20kb.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.thin20kb.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.thin20kb.vcf.gz ..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.thin20kb.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+
+# --------------------------------
+# Third: thin with 1 kb windows (NJ tree)
+# --------------------------------
+## Lastly, we thin for the NJtree using 1kb windows for the full VCF ...
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.vcf.gz --thin 1000 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.thin1kb.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.thin1kb.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.thin1kb.vcf.gz ..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noCAXY.367inds.mac2.thin1kb.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+... and the VCF w/o chromosome 3
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.vcf.gz --thin 1000 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.thin1kb.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.thin1kb.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.thin1kb.vcf.gz ..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noChrom03.367inds.mac2.thin1kb.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+echo "All thinning steps finished." >> "$ThinningOutput"
+
+## END.
