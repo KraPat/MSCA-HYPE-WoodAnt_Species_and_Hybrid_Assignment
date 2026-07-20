@@ -1,0 +1,183 @@
+#After creating the first PCA, we found 9 samples that are F. sanuguina (4) and F. exsecta (5), listed below:
+vim removeInds.list2
+A_128a_spp_FI_nodupl_wRG_clip2
+A_136a_spp_FI_nodupl_wRG_clip2
+A_246a_spp_FI_nodupl_wRG_clip2
+A_334a_spp_IT_nodupl_wRG_clip2
+A_351a_spp_CH_nodupl_wRG_clip2
+A_398a_spp_AT_nodupl_wRG_clip2
+F00009a_spp_DE_nodupl_wRG_clip2
+H_exsecta_spp_IT_nodupl_wRG_clip2
+H_sangu_spp_IT_nodupl_wRG_clip2
+
+# We will now exclude thee samples from the two filtered VCF files:
+all_samples_DP8.AN10.376Inds_noCAXY.vcf.gz
+all_samples_DP8.AN10.376Inds_noChrom03.vcf.gz
+
+# In doing so, we don't need to re-filter these regions or chromosome 3, but we still need to filter for AN, number of alleles.
+
+vim "13.1_VCFfiltering_sang_exs.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J filt_sang_exs
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filt_sang_%a.out  #CHANGE number of samples
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filt_sang_%a.err  #CHANGE number of samples
+#SBATCH -t 04:00:00
+#SBATCH -p small
+#SBATCH --ntasks 4
+#SBATCH --mem=8G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+module load biokit
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+
+# Similar as above, after excluding X number of samples, we filter again based on the NEW allelic number after filtering for dat missingness.
+## NOTE, calculate and change based on the number of samples, that is, 385-9 = 376
+# 376 samples - 9 samples = 367 samples; 367 samples = 734 alleles expected
+# 10% missing data of 734 = 73.4. 734 - 73.4 = 660.6 alleles, ~660
+
+# --------------------------
+# Parameters
+# --------------------------
+NoAlleles=660       # minimum AN threshold, change accordinly
+FilterData_Output="FilterData_Output_wo_FsangFexs_noCAXY.txt"
+
+# --------------------------
+# Input / output VCF files
+# --------------------------
+VCF1=all_samples_DP8.AN10.376Inds_noCAXY.vcf.gz
+VCF2=all_samples_DP8.AN10.376Inds_noCAXY.367inds.vcf.gz
+VCF3=all_samples_DP8.AN10.376Inds_noCAXY.367inds.AN10percMiss.vcf.gz
+
+# Start log file
+echo "=== Filtering log ===" > "$FilterData_Output"
+echo "VCF1: $VCF1" >> "$FilterData_Output"
+echo "VCF2: $VCF2" >> "$FilterData_Output"
+echo "VCF3: $VCF3" >> "$FilterData_Output"
+echo "NoAlleles (AN threshold): $NoAlleles" >> "$FilterData_Output"
+echo >> "$FilterData_Output"
+
+# --------------------------
+# 1. Filter out individuals
+# --------------------------
+echo "Step 1: Removing individuals listed in removeInds.list" >> "$FilterData_Output"
+
+# vcftools writes a lot to stderr; capture that into the log
+vcftools --gzvcf "$VCF1" \
+         --remove removeInds.list \
+         --recode --recode-INFO-all \
+         --stdout | bgzip > "$VCF2"
+
+# Index VCF2
+bcftools index -t "$VCF2"
+
+{
+    echo "number of inds (should be 376)..."
+    bcftools query -l "$VCF2" | wc -l
+
+    echo "number of variants ..."
+    bcftools index -n "$VCF2"
+} >> "$FilterData_Output"
+
+echo >> "$FilterData_Output"
+
+# --------------------------
+# 2. Filter on allelic number (AN) and inde
+# --------------------------
+echo "Step 2: Filtering sites with AN >= $NoAlleles" >> "$FilterData_Output"
+
+# Filter and index VCF3
+bcftools view --threads 4 -Oz -i "AN >= ${NoAlleles}" "$VCF2" > "$VCF3"
+bcftools index -t "$VCF3" 
+
+{
+    echo "number of variants after AN filtering..."
+    bcftools index -n "$VCF3"
+} >> "$FilterData_Output"
+
+echo "Filtering finished." >> "$FilterData_Output"
+
+#Output to standard output as well
+echo "number of inds when should be 376..."
+bcftools query -l $VCF2 | wc -l
+echo "number of variants ..."
+bcftools index -n $VCF2
+echo "number of variants after AN filtering..."
+bcftools index -n $VCF3
+
+#-----------------------------------------------
+# --------------------------
+# Parameters
+# --------------------------
+NoAlleles=660       # minimum AN threshold, change accordinly
+FilterData_Output="FilterData_Output_wo_FsangFexs_noChrom3.txt"
+
+# --------------------------
+# Input / output VCF files
+# --------------------------
+VCF4=all_samples_DP8.AN10.376Inds_noChrom03.vcf.gz
+VCF5=aall_samples_DP8.AN10.376Inds_noChrom03.367inds.vcf.gz
+VCF6=all_samples_DP8.AN10.376Inds_noChrom03.367inds.AN10percMiss.vcf.gz
+
+# Start log file
+echo "=== Filtering log ===" > "$FilterData_Output"
+echo "VCF4: $VCF4" >> "$FilterData_Output"
+echo "VCF5: $VCF5" >> "$FilterData_Output"
+echo "VCF6: $VCF6" >> "$FilterData_Output"
+echo "NoAlleles (AN threshold): $NoAlleles" >> "$FilterData_Output"
+echo >> "$FilterData_Output"
+
+
+# --------------------------
+# 1. Filter out individuals
+# --------------------------
+echo "Step 1: Removing individuals listed in removeInds.list" >> "$FilterData_Output"
+
+# vcftools writes a lot to stderr; capture that into the log
+vcftools --gzvcf "$VCF4" \
+         --remove removeInds.list \
+         --recode --recode-INFO-all \
+         --stdout | bgzip > "$VCF5"
+
+# Index VCF2
+bcftools index -t "$VCF5"
+
+{
+    echo "number of inds (should be 376)..."
+    bcftools query -l "$VCF5" | wc -l
+
+    echo "number of variants ..."
+    bcftools index -n "$VCF5"
+} >> "$FilterData_Output"
+
+echo >> "$FilterData_Output"
+
+# --------------------------
+# 2. Filter on allelic number (AN) and inde
+# --------------------------
+echo "Step 2: Filtering sites with AN >= $NoAlleles" >> "$FilterData_Output"
+
+# Filter and index VCF6
+bcftools view --threads 4 -Oz -i "AN >= ${NoAlleles}" "$VCF5" > "$VCF6"
+bcftools index -t "$VCF6" 
+
+{
+    echo "number of variants after AN filtering..."
+    bcftools index -n "$VCF6"
+} >> "$FilterData_Output"
+
+echo "Filtering finished." >> "$FilterData_Output"
+
+#Output to standard output as well
+echo "number of inds when should be 367..."
+bcftools query -l $VCF5 | wc -l
+echo "number of variants ..."
+bcftools index -n $VCF5
+echo "number of variants after AN filtering..."
+bcftools index -n $VCF6
+
+###END.
+
