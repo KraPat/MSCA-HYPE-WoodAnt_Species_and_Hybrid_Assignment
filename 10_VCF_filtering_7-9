@@ -122,6 +122,13 @@ cd /scratch/project_2009316/EuSamples/06.VCF/filt
 NoAlleles=677        # minimum AN threshold, change accordinly
 FilterData_Output="FilterData_Output.txt"
 
+# --------------------------
+# Input / output VCF files
+# --------------------------
+VCF1=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
+VCF2=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.376inds.vcf.gz
+VCF3=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.376inds.AN10percMiss.vcf.gz
+
 # Start log file
 echo "=== Filtering log ===" > "$FilterData_Output"
 echo "VCF1: $VCF1" >> "$FilterData_Output"
@@ -129,13 +136,6 @@ echo "VCF2: $VCF2" >> "$FilterData_Output"
 echo "VCF3: $VCF3" >> "$FilterData_Output"
 echo "NoAlleles (AN threshold): $NoAlleles" >> "$FilterData_Output"
 echo >> "$FilterData_Output"
-
-# --------------------------
-# Input / output VCF files
-# --------------------------
-VCF1=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.vcf.gz
-VCF2=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.376inds.vcf.gz
-VCF3=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.376inds.AN10percMiss.vcf.gz
 
 # --------------------------
 # 1. Filter out individuals
