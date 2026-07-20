@@ -38,8 +38,15 @@ mkdir -p "$FILT" "$TMPDIR"
 cd "$FILT"
 
 # 1. Normalize (including multiallelic splitting) in BCF and convert convert to VCF text for vcfwave
+ #--- It left-aligns indels relative to the reference. -m -both splits multiallelic records (multiple ALT alleles) into multiple biallelic records.
+ #--- Importantly: No variant types are removed (SNPs, indels, SVs all kept). And multi-allelic sites are represented as several single-ALT records instead of one multi-ALT record.
 # 2. Decompose alleles (atomize) and sort and save as VCF.gz
+ #--- --atomize breaks complex alleles (e.g. MNPs, complex indels) into “atomic” pieces:
+ #--- e.g. a complex variant may become a series of simpler SNPs/indels, each with its own record.
+ #--- No variant types removed and the representation is more “simple and regular”, which many downstream tools prefer.
 # 3. Strip phasing and patch missing genotype pattern (your existing sed logic)
+#--- Removes phase information (e.g. 0|1 → 0/1) and handles missing GT patterns.
+#--- Still no removal of variant categories.
 
 # 1. Normalize
 #bcftools norm -f "$REF" -m -both -O z -o $BASE/06.VCF/filt/all_samples.normalized.vcf.gz "$RAW"
