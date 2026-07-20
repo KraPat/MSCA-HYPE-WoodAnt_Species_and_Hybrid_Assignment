@@ -7,7 +7,7 @@
 
 ## Before we start, we need to create a folder "pca" in /scratch/project_2009316/EuSamples/06.VCF
 /scratch/project_2009316/EuSamples/06.VCF
-mkdir pcf
+mkdir -p pca
 
 ############  CLUSTER script ###############################################################
 ## SCRIPT start sinteractive
@@ -21,18 +21,6 @@ OUTPATH=/scratch/project_2009316/EuSamples/06.VCF/pca
 
 # Path to the filtered VCF (incl chromosome 03 excluded, 20 kb thinning)
 VCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noCAXY.mac2.thin20kb.vcf.gz
-
-# Run PCA with PLINK 
-#plink --threads 1 \
-#      --vcf $VCF \
-#      --double-id \
-#      --allow-extra-chr \
-#      --set-missing-var-ids @:# \
-#      --pca header var-wts \
-#      --out $OUTPATH/all_samples_DP8_PCA
-
-## Below, all in a single line
-plink --threads 1 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --pca header var-wts --out $OUTPATH/all_samples_DP8_PCA
 
 #plink2 \
 #    --threads 1 \
@@ -153,37 +141,18 @@ ggplot(PCA_vec, aes(x = PC1, y = PC2, col=Species, label=ID_short)) + #,
         panel.grid.minor.x = element_blank())
 dev.off()
 
+# After checking the PCA, we found 9 samples that are from F. sanguinea and F. exsecta. These are:
+A_128a_spp_FI_nodupl_wRG_clip2
+A_136a_spp_FI_nodupl_wRG_clip2
+A_246a_spp_FI_nodupl_wRG_clip2
+A_334a_spp_IT_nodupl_wRG_clip2
+A_351a_spp_CH_nodupl_wRG_clip2
+A_398a_spp_AT_nodupl_wRG_clip2
+F00009a_spp_DE_nodupl_wRG_clip2
+H_exsecta_spp_IT_nodupl_wRG_clip2
+H_sangu_spp_IT_nodupl_wRG_clip2
 
-#Now, PC1-3
-pdf("DutchSamples_PC13_20251223.pdf")
-png("DutchSamples_PC13_20251223.png", res=300, width = 3000, height = 3000)
-ggplot(PCA_vec, aes(x = PC1, y = PC3, col=Species, label=ID_short)) + #, 
-  geom_point(size=3) +
-  #labs(title = "PCA of Formica samples") +
-  scale_color_manual(name="Species",
-                     labels=c(expression(italic("F. aquilonia")),
-                              expression(italic("F. lugubris")),
-                              expression(italic("F. polyctena")),
-                              expression(italic("F. pratensis")),
-                              expression(italic("F. rufa")),
-                              "Hybrid", "Hybrid2", "NA"),  
-                     values=c("darkgreen", "lightgreen",
-                              "#d3c055",  "blue",
-                              "darkorange", 
-                              "#a072d5", "#d6461f", "black"))+ ##d6461f "#e7b727",
-  #stat_ellipse(level = 0.95, size=1) +  #
-  xlab(paste0("PC1 (", signif(percentages[1], 3), "%)")) + ylab(paste0("PC3 (", signif(percentages[3], 3), "%)")) +
-  geom_text(vjust = -0.7, size = 3) +
-  theme_bw() +#
-  theme(plot.title = element_text(size=20),
-        #legend.position="none",
-        axis.title.x = element_text(size=13),
-        axis.text.x  = element_text(size=11, color="black"),
-        axis.title.y = element_text(size=13),
-        axis.text.y  = element_text(size=11, color="black"),
-        panel.grid.minor.x = element_blank())
-dev.off()
-
+# I will exclude them now and re-do the last filtering steps without the samples.
 
 
 
