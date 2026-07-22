@@ -138,7 +138,7 @@ echo "Step 1: Removing individuals listed in removeInds.list" >> "$FilterData_Ou
 
 # vcftools writes a lot to stderr; capture that into the log
 vcftools --gzvcf "$VCF4" \
-         --remove removeInds.list \
+         --remove removeInds.list2 \
          --recode --recode-INFO-all \
          --stdout | bgzip > "$VCF5"
 
@@ -146,7 +146,7 @@ vcftools --gzvcf "$VCF4" \
 bcftools index -t "$VCF5"
 
 {
-    echo "number of inds (should be 376)..."
+    echo "number of inds (should be 367)..."
     bcftools query -l "$VCF5" | wc -l
 
     echo "number of variants ..."
@@ -292,3 +292,33 @@ bcftools index -t all_samples_DP8.AN10.376Inds_noChrom03.367inds.AN10.mac2.thin1
 echo "All thinning steps finished." >> "$ThinningOutput"
 
 ## END.
+
+
+--------------------------------------
+############  CLUSTER script ###############################################################
+## SCRIPT start sinteractive
+
+sinteractive --account project_2009316 --mem 3000
+module load biokit
+module load plink
+
+cd /scratch/project_2009316/EuSamples/06.VCF/pca
+OUTPATH=/scratch/project_2009316/EuSamples/06.VCF/pca
+
+# Path to the filtered VCF (incl chromosome 03, 20 kb thinning)
+VCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noCAXY.367inds.AN10.mac2.thin20kb.vcf.gz
+
+# Below, all in a single line
+plink2 --threads 1 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --pca 20 approx --out $OUTPATH/all_367samples_DP8_PCA
+
+##### IF WE WANT TO USE PLINK2, WE CAN ALSO CALCULATE ALLELE FREUQUENCIES DIRECTLY
+#Oneliner
+plink2 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --freq --out $OUTPATH/all_367samples_DP8_freq
+
+## This produces the file "all_367samples_DP8_freq.afreq". Now, we can run the code below to calculate the PCA
+# --pca extracts the top 20 principal components 
+## Oneliner below
+plink2 --threads 1 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --read-freq $OUTPATH/all_367samples_DP8_freq.afreq --pca 20 approx --out $OUTPATH/all_samples_DP8_PCA
+
+exit
+# to exit sinteractive
