@@ -1,0 +1,348 @@
+# In 13.2, we created a PCA with F. rufa, F. poly, F. aqui, F. lug, F. paralurugbirs, F. pratensis, F. truncorum, and hybrids.
+# Now, we exclude F. truncorum and F. pratensis for the next PCA. 
+# Note, previously assigned Adm2 hybrids in Northern Finland seem to be F. truncorum.
+# We now remove 30 additional samples:
+vim removeInds.list3
+117_Fprat_FI_nodupl_wRG_clip2
+120_Fprat_FI_nodupl_wRG_clip2
+122_Fprat_FI_nodupl_wRG_clip2
+123_Fprat_FI_nodupl_wRG_clip2
+2_Fprat_FI_nodupl_wRG_clip2
+3_Fprat_FI_nodupl_wRG_clip2
+6_Fprat_FI_nodupl_wRG_clip2
+A_110a_Fprat_FI_nodupl_wRG_clip2
+A_140a_Fprat_FI_nodupl_wRG_clip2
+A_165a_Fprat_FI_nodupl_wRG_clip2
+A_219a_Adm2_FI_nodupl_wRG_clip2
+A_221a_Adm2_FI_nodupl_wRG_clip2
+A_366a_Fprat_CH_nodupl_wRG_clip2
+A_373d_Fprat_AT_nodupl_wRG_clip2
+A_374a_Fprat_AT_nodupl_wRG_clip2
+Fprat_SRR17066791_nodupl_wRG_clip2
+Ftrunc_SRR15845271_nodupl_wRG_clip2
+Ftrunc_SRR15845632_nodupl_wRG_clip2
+H_303A_spp_SE_nodupl_wRG_clip2
+H_434A_spp_SE_nodupl_wRG_clip2
+H_547A_spp_DE_nodupl_wRG_clip2
+H_548A_spp_DE_nodupl_wRG_clip2
+H_563A_spp_AT_nodupl_wRG_clip2
+H_586A_spp_IT_nodupl_wRG_clip2
+H_627A_spp_IT_nodupl_wRG_clip2
+H_trunc_spp_IT_nodupl_wRG_clip2
+Th1_Fprat_NL_nodupl_wRG_clip2
+Th2_Fprat_NL_nodupl_wRG_clip2
+W1_Fprat_NL_nodupl_wRG_clip2
+W2_Fprat_NL_nodupl_wRG_clip2
+
+# We will now exclude thee samples from the two filtered VCF files:
+#all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz
+#all_samples_DP8.AN10.376Inds_noChrom03.364inds.vcf.gz
+
+# In doing so, we don't need to re-filter these regions or chromosome 3, but we still need to filter for AN, number of alleles.
+
+vim "13.3_VCFfiltering_trunc_prat.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J filt_trunc_prat
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filt_prat_%a.out  #CHANGE number of samples
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filt_prat_%a.err  #CHANGE number of samples
+#SBATCH -t 04:00:00
+#SBATCH -p small
+#SBATCH --ntasks 4
+#SBATCH --mem=8G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+module load biokit
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+
+# Similar as above, after excluding X number of samples, we filter again based on the NEW allelic number after filtering for dat missingness.
+## NOTE, calculate and change based on the number of samples, that is, 385-9 = 376
+# 364 samples - 30 samples = 334 samples; 334 samples x2 alleles = 668 alleles expected
+# 10% missing data of 668 = 66.8. 668 - 66.8 = 601.2 alleles, ~601
+
+# --------------------------
+# Parameters
+# --------------------------
+NoAlleles=601       # minimum AN threshold, change accordinly
+FilterData_Output="FilterData_Output_wo_Ftrun_prat_noCAXY.txt"
+
+# --------------------------
+# Input / output VCF files
+# --------------------------
+VCF1=all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz
+VCF2=all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.vcf.gz
+VCF3=all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10percMiss.vcf.gz
+
+# Start log file
+echo "=== Filtering log ===" > "$FilterData_Output"
+echo "VCF1: $VCF1" >> "$FilterData_Output"
+echo "VCF2: $VCF2" >> "$FilterData_Output"
+echo "VCF3: $VCF3" >> "$FilterData_Output"
+echo "NoAlleles (AN threshold): $NoAlleles" >> "$FilterData_Output"
+echo >> "$FilterData_Output"
+
+# --------------------------
+# 1. Filter out individuals
+# --------------------------
+echo "Step 1: Removing individuals listed in removeInds.list3" >> "$FilterData_Output"
+
+# vcftools writes a lot to stderr; capture that into the log
+vcftools --gzvcf "$VCF1" \
+         --remove removeInds.list3 \
+         --recode --recode-INFO-all \
+         --stdout | bgzip > "$VCF2"
+
+# Index VCF2
+bcftools index -t "$VCF2"
+
+{
+    echo "number of inds (should be 376)..."
+    bcftools query -l "$VCF2" | wc -l
+
+    echo "number of variants ..."
+    bcftools index -n "$VCF2"
+} >> "$FilterData_Output"
+
+echo >> "$FilterData_Output"
+
+# --------------------------
+# 2. Filter on allelic number (AN) and inde
+# --------------------------
+echo "Step 2: Filtering sites with AN >= $NoAlleles" >> "$FilterData_Output"
+
+# Filter and index VCF3
+bcftools view --threads 4 -Oz -i "AN >= ${NoAlleles}" "$VCF2" > "$VCF3"
+bcftools index -t "$VCF3" 
+
+{
+    echo "number of variants after AN filtering..."
+    bcftools index -n "$VCF3"
+} >> "$FilterData_Output"
+
+echo "Filtering finished." >> "$FilterData_Output"
+
+#Output to standard output as well
+echo "number of inds when should be 376..."
+bcftools query -l $VCF2 | wc -l
+echo "number of variants ..."
+bcftools index -n $VCF2
+echo "number of variants after AN filtering..."
+bcftools index -n $VCF3
+
+#-----------------------------------------------
+# --------------------------
+# Parameters
+# --------------------------
+NoAlleles=601       # minimum AN threshold, change accordinly
+FilterData_Output="FilterData_Output_wo_Ftrun_prat__noChrom3.txt"
+
+# --------------------------
+# Input / output VCF files
+# --------------------------
+VCF4=all_samples_DP8.AN10.376Inds_noChrom03.364inds.vcf.gz
+VCF5=all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.vcf.gz
+VCF6=all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10percMiss.vcf.gz
+
+# Start log file
+echo "=== Filtering log ===" > "$FilterData_Output"
+echo "VCF4: $VCF4" >> "$FilterData_Output"
+echo "VCF5: $VCF5" >> "$FilterData_Output"
+echo "VCF6: $VCF6" >> "$FilterData_Output"
+echo "NoAlleles (AN threshold): $NoAlleles" >> "$FilterData_Output"
+echo >> "$FilterData_Output"
+
+
+# --------------------------
+# 1. Filter out individuals
+# --------------------------
+echo "Step 1: Removing individuals listed in removeInds.list3" >> "$FilterData_Output"
+
+# vcftools writes a lot to stderr; capture that into the log
+vcftools --gzvcf "$VCF4" \
+         --remove removeInds.list3 \
+         --recode --recode-INFO-all \
+         --stdout | bgzip > "$VCF5"
+
+# Index VCF2
+bcftools index -t "$VCF5"
+
+{
+    echo "number of inds (should be 367)..."
+    bcftools query -l "$VCF5" | wc -l
+
+    echo "number of variants ..."
+    bcftools index -n "$VCF5"
+} >> "$FilterData_Output"
+
+echo >> "$FilterData_Output"
+
+# --------------------------
+# 2. Filter on allelic number (AN) and inde
+# --------------------------
+echo "Step 2: Filtering sites with AN >= $NoAlleles" >> "$FilterData_Output"
+
+# Filter and index VCF6
+bcftools view --threads 4 -Oz -i "AN >= ${NoAlleles}" "$VCF5" > "$VCF6"
+bcftools index -t "$VCF6" 
+
+{
+    echo "number of variants after AN filtering..."
+    bcftools index -n "$VCF6"
+} >> "$FilterData_Output"
+
+echo "Filtering finished." >> "$FilterData_Output"
+
+#Output to standard output as well
+echo "number of inds when should be 367..."
+bcftools query -l $VCF5 | wc -l
+echo "number of variants ..."
+bcftools index -n $VCF5
+echo "number of variants after AN filtering..."
+bcftools index -n $VCF6
+
+###END.
+
+
+----
+## Note, these VCF files cannot be directly used for analyses but needs to undergo a few more thinning steps to reduce LD, see below.
+## But this is the last step now
+
+vim "13.4_VCFfiltering_Thin_334inds.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J filter_mac_thin2
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/filter_mac_thin2.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/filter_mac_thin2.err
+#SBATCH -t 08:00:00
+#SBATCH -p small
+#SBATCH --ntasks 4
+#SBATCH --mem=8G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+module load biokit
+
+# --------------------------------
+# Log file for thinning (echo + counts only)
+# --------------------------------
+ThinningOutput="ThinningOutput"
+
+echo "=== Thinning / MAC filtering log ===" > "$ThinningOutput"
+echo "Working directory: $(pwd)" >> "$ThinningOutput"
+echo >> "$ThinningOutput.noCAXY.364inds.334inds"
+
+# --------------------------------
+# First: MAC=2 for full VCF
+# --------------------------------
+# First, we select only 2-allelic SNPS for the full VCF file
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10percMiss.vcf.gz --mac 2 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.vcf.gz..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+# We do the same for the VCF withouth chromosome 3
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10percMiss.vcf.gz --mac 2 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.vcf.gz ..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+
+# --------------------------------
+# Second: thin with 20 kb windows
+# --------------------------------
+## Second, we thin with 20kb windows for the full VCF ...
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.vcf.gz --thin 20000 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.thin20kb.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.thin20kb.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.thin20kb.vcf.gz ..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.thin20kb.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+#... and the VCF w/o chromosome 3
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.vcf.gz --thin 20000 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.thin20kb.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.thin20kb.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.thin20kb.vcf.gz ..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.thin20kb.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+
+# --------------------------------
+# Third: thin with 1 kb windows (NJ tree)
+# --------------------------------
+## Lastly, we thin for the NJtree using 1kb windows for the full VCF ...
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.vcf.gz --thin 1000 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.thin1kb.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.thin1kb.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.thin1kb.vcf.gz ..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noCAXY.364inds.334inds.AN10.mac2.thin1kb.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+#... and the VCF w/o chromosome 3
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.vcf.gz --thin 1000 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.thin1kb.vcf.gz
+bcftools index -t all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.thin1kb.vcf.gz
+
+# Save to ThinningOutput
+{
+    echo "number of variants in all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.mac2.thin1kb.vcf.gz ..."
+    bcftools index -n all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.thin1kb.vcf.gz
+    echo
+} >> "$ThinningOutput"
+
+echo "All thinning steps finished." >> "$ThinningOutput"
+
+## END.
+
+
+--------------------------------------
+############  CLUSTER script ###############################################################
+## SCRIPT start sinteractive
+
+sinteractive --account project_2009316 --mem 3000
+module load biokit
+module load plink
+
+cd /scratch/project_2009316/EuSamples/06.VCF/pca
+OUTPATH=/scratch/project_2009316/EuSamples/06.VCF/pca
+
+# Path to the filtered VCF (incl chromosome 03, 20 kb thinning)
+VCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noCAXY.364inds.AN10.mac2.thin20kb.vcf.gz
+
+# Below, all in a single line
+plink2 --threads 1 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --pca 20 approx --out $OUTPATH/all_364samples_DP8_PCA
+
+##### IF WE WANT TO USE PLINK2, WE CAN ALSO CALCULATE ALLELE FREUQUENCIES DIRECTLY
+#Oneliner
+plink2 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --freq --out $OUTPATH/all_364samples_DP8_freq
+
+## This produces the file "all_364samples_DP8_freq.afreq". Now, we can run the code below to calculate the PCA
+# --pca extracts the top 20 principal components 
+## Oneliner below
+plink2 --threads 1 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --read-freq $OUTPATH/all_364samples_DP8_freq.afreq --pca 20 approx --out $OUTPATH/all_samples_DP8_PCA
+
+exit
+# to exit sinteractive
