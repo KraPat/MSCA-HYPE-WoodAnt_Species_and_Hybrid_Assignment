@@ -9,7 +9,7 @@ A_398a_spp_AT_nodupl_wRG_clip2
 F00009a_spp_DE_nodupl_wRG_clip2
 H_exsecta_spp_IT_nodupl_wRG_clip2
 H_sangu_spp_IT_nodupl_wRG_clip2
-XXX
+Fsangu_SRR15845536_nodupl_wRG_clip2
 
 # We will now exclude thee samples from the two filtered VCF files:
 all_samples_DP8.AN10.376Inds_noCAXY.vcf.gz
