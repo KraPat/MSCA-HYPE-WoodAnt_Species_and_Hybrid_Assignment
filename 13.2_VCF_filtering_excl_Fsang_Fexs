@@ -1,4 +1,4 @@
-#After creating the first PCA, we found 9 samples that are F. sanuguina (4) and F. exsecta (5), listed below:
+#After creating the first PCA, we found 10 samples that are F. sanuguina (4) and F. exsecta (5), listed below:
 vim removeInds.list2
 A_128a_spp_FI_nodupl_wRG_clip2
 A_136a_spp_FI_nodupl_wRG_clip2
@@ -9,6 +9,7 @@ A_398a_spp_AT_nodupl_wRG_clip2
 F00009a_spp_DE_nodupl_wRG_clip2
 H_exsecta_spp_IT_nodupl_wRG_clip2
 H_sangu_spp_IT_nodupl_wRG_clip2
+XXX
 
 # We will now exclude thee samples from the two filtered VCF files:
 all_samples_DP8.AN10.376Inds_noCAXY.vcf.gz
