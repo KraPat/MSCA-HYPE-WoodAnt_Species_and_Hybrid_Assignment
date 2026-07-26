@@ -47,7 +47,6 @@ VCF2=all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.374Inds.vcf.gz
 echo "=== Filtering log ===" > "$FilterData_Output"
 echo "VCF1: $VCF1" >> "$FilterData_Output"
 echo "VCF2: $VCF2" >> "$FilterData_Output"
-echo "NoAlleles (AN threshold): $NoAlleles" >> "$FilterData_Output"
 echo >> "$FilterData_Output"
 
 # --------------------------
@@ -65,7 +64,7 @@ vcftools --gzvcf "$VCF1" \
 bcftools index -t "$VCF2"
 
 {
-    echo "number of inds (should be 376)..."
+    echo "number of inds (should be 374)..."
     bcftools query -l "$VCF2" | wc -l
 
     echo "number of variants ..."
