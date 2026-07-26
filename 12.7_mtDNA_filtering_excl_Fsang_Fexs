@@ -107,13 +107,13 @@ VCF3=all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.364Inds.vcf.gz
 # Below, all in a single line
 plink2 --threads 1 --vcf $VCF1 --double-id --allow-extra-chr --set-missing-var-ids @:# --pca 10 approx --out $OUTPATH/all_samples_DP8_PCA
 plink2 --threads 1 --vcf $VCF2 --double-id --allow-extra-chr --set-missing-var-ids @:# --pca 10 approx --out $OUTPATH/all_374samples_DP8_PCA
-plink2 --threads 1 --vcf $VCF2 --double-id --allow-extra-chr --set-missing-var-ids @:# --pca 10 approx --out $OUTPATH/all_364samples_DP8_PCA
+plink2 --threads 1 --vcf $VCF3 --double-id --allow-extra-chr --set-missing-var-ids @:# --pca 10 approx --out $OUTPATH/all_364samples_DP8_PCA
 
 ##### IF WE WANT TO USE PLINK2, WE CAN ALSO CALCULATE ALLELE FREUQUENCIES DIRECTLY
 #Oneliner
 plink2 --vcf $VCF1 --double-id --allow-extra-chr --set-missing-var-ids @:# --freq --out $OUTPATH/all_samples_DP8_freq
-plink2 --vcf $VCF1 --double-id --allow-extra-chr --set-missing-var-ids @:# --freq --out $OUTPATH/all_374samples_DP8_freq
-plink2 --vcf $VCF1 --double-id --allow-extra-chr --set-missing-var-ids @:# --freq --out $OUTPATH/all_364samples_DP8_freq
+plink2 --vcf $VCF2 --double-id --allow-extra-chr --set-missing-var-ids @:# --freq --out $OUTPATH/all_374samples_DP8_freq
+plink2 --vcf $VCF3 --double-id --allow-extra-chr --set-missing-var-ids @:# --freq --out $OUTPATH/all_364samples_DP8_freq
 
 exit
 # to exit sinteractive
