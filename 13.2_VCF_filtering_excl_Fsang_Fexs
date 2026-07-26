@@ -64,11 +64,11 @@ echo >> "$FilterData_Output"
 # --------------------------
 # 1. Filter out individuals
 # --------------------------
-echo "Step 1: Removing individuals listed in removeInds.list" >> "$FilterData_Output"
+echo "Step 1: Removing individuals listed in removeInds.list2" >> "$FilterData_Output"
 
 # vcftools writes a lot to stderr; capture that into the log
 vcftools --gzvcf "$VCF1" \
-         --remove removeInds.list \
+         --remove removeInds.list2 \
          --recode --recode-INFO-all \
          --stdout | bgzip > "$VCF2"
 
@@ -135,7 +135,7 @@ echo >> "$FilterData_Output"
 # --------------------------
 # 1. Filter out individuals
 # --------------------------
-echo "Step 1: Removing individuals listed in removeInds.list" >> "$FilterData_Output"
+echo "Step 1: Removing individuals listed in removeInds.list2" >> "$FilterData_Output"
 
 # vcftools writes a lot to stderr; capture that into the log
 vcftools --gzvcf "$VCF4" \
