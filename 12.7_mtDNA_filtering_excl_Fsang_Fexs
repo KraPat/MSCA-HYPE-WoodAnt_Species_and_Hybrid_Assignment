@@ -1,0 +1,77 @@
+# We now have the mtDNA VCF file still includting F. sanguinea and F. exsecta, which are quite distanlty related. 
+all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
+# From the VCF file above, we now remove all F. sanguinea and F. exsecta samples using the same steps as in 13.2, but not the thinning.
+# See the scripts below, which excludes the 10 indiviuals:
+vim removeInds.list2
+A_128a_spp_FI_nodupl_wRG_clip2
+A_136a_spp_FI_nodupl_wRG_clip2
+A_246a_spp_FI_nodupl_wRG_clip2
+A_334a_spp_IT_nodupl_wRG_clip2
+A_351a_spp_CH_nodupl_wRG_clip2
+A_398a_spp_AT_nodupl_wRG_clip2
+F00009a_spp_DE_nodupl_wRG_clip2
+H_exsecta_spp_IT_nodupl_wRG_clip2
+H_sangu_spp_IT_nodupl_wRG_clip2
+Fsangu_SRR15845536_nodupl_wRG_clip2
+
+vim "12.7_mtDNA_VCFfiltering_sang_exs.sh"
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J filt_sang_exs
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/filt_sang_%a.out  #CHANGE number of samples
+#SBATCH -e /scratch/project_2009316/EuSamples/07.VCF_mtDNA/logs/filt_sang_%a.err  #CHANGE number of samples
+#SBATCH -t 03:00:00
+#SBATCH -p small
+#SBATCH --ntasks 4
+#SBATCH --mem=8G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+set -euo pipefail
+
+module load biokit
+cd /scratch/project_2009316/EuSamples/07.VCF_mtDNA/filt
+
+# --------------------------
+# Parameters
+# --------------------------
+FilterData_Output="FilterData_Output_wo_FsangFexs_mtDNA.txt"
+
+# --------------------------
+# Input / output VCF files
+# --------------------------
+VCF1=all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
+VCF2=all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.374Inds.vcf.gz
+
+# Start log file
+echo "=== Filtering log ===" > "$FilterData_Output"
+echo "VCF1: $VCF1" >> "$FilterData_Output"
+echo "VCF2: $VCF2" >> "$FilterData_Output"
+echo "NoAlleles (AN threshold): $NoAlleles" >> "$FilterData_Output"
+echo >> "$FilterData_Output"
+
+# --------------------------
+# 1. Filter out individuals
+# --------------------------
+echo "Step 1: Removing individuals listed in removeInds.list2" >> "$FilterData_Output"
+
+# vcftools writes a lot to stderr; capture that into the log
+vcftools --gzvcf "$VCF1" \
+         --remove removeInds.list2 \
+         --recode --recode-INFO-all \
+         --stdout | bgzip > "$VCF2"
+
+# Index VCF2
+bcftools index -t "$VCF2"
+
+{
+    echo "number of inds (should be 376)..."
+    bcftools query -l "$VCF2" | wc -l
+
+    echo "number of variants ..."
+    bcftools index -n "$VCF2"
+} >> "$FilterData_Output"
+
+echo >> "$FilterData_Output"
+
+# END
