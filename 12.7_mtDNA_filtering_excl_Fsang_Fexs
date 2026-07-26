@@ -3,6 +3,16 @@ all_samples_mtDNA.norm.dec.sor.nopha.SNPQ30.biall.vcf.gz
 # From the VCF file above, we now remove all F. sanguinea and F. exsecta samples using the same steps as in 13.2, but not the thinning.
 # See the scripts below, which excludes the 10 indiviuals:
 vim removeInds.list2
+105_Adm1_FI_nodupl_wRG_clip2
+54_Adm1_FI_nodupl_wRG_clip2
+A_275b_spp_FI_nodupl_wRG_clip2
+Fpoly_SRR12432375_nodupl_wRG_clip2
+Fprat_SRR15845547_nodupl_wRG_clip2
+H_275B_spp_FI_nodupl_wRG_clip2
+RN418_spp_DE_nodupl_wRG_clip2
+s353_spp_DE_nodupl_wRG_clip2
+s354_spp_DE_nodupl_wRG_clip2
+#--- above, all samples with >50% missing data; below, without F. sanguinea and F. exsecta 
 A_128a_spp_FI_nodupl_wRG_clip2
 A_136a_spp_FI_nodupl_wRG_clip2
 A_246a_spp_FI_nodupl_wRG_clip2
