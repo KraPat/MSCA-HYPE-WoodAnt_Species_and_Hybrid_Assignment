@@ -1,0 +1,161 @@
+## In this script, we will create an "admixture" plot based an allele frequency similarities (using the softwre "admixture").
+## First, we need to create an "admixture" folder under "scratch/project_2009316/EuSamples/filt/"
+## Second, we need to create bim, bed, fam, and log files, using the script "12a_prep-f-admixture".
+## Third, we run the "12b_admixture.sh" scipt to create the admixture plot.
+
+################    Preperation for admixture analysis    ##################################
+######## Beginning script called "14.1_prep-f-admixture"
+## It creates the blink bim, bed, fam, log files
+## Note, we will use sinteractive for this and use the "mac2_thin20kb.vcf.gz". We have already created this file in the steps 13.2 and 13.3, when we excluded F. sanguine, F. exsecta, F. truncorum, F. pratensis. 
+
+-----------------
+## NOTE, this below is for consistency: In case we have an unbalanced sample design, we may want to balance this. Then, we need to select the samples we want to keep and store this information in a file called "balanced_sample_list.list". Here, our sample desing is quite balanced, so no need for this. It is added for consistency below.
+
+##############################################
+cd /scratch/project_2009316/EuSamples/06.VCF
+mkdir admixture
+sinteractive --account project_2009316 --mem 2000
+module load biokit
+module load plink
+
+#VCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2.vcf.gz
+OUTVCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2.thin20kb.vcf.gz
+OUTPATH=/scratch/project_2009316/EuSamples/06.VCF/admixture
+OUTFILE=all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb
+
+# Thin the VCF with 20kb distances to reduce linkage
+# The code below was already done in steps 13. So we continue with "Convert the VCF into PLINK format for ..."
+#vcftools --gzvcf $VCF --thin 20000 --recode --stdout | bgzip > $OUTVCF
+#bcftools index -t $OUTVCF
+#bcftools index -n $OUTVCF #9927 SNPs
+
+## Convert the VCF ("OUTVCF") into PLINK format for ADMIXTURE analysis
+plink2 --threads 1 --vcf $OUTVCF --make-bed --double-id --allow-extra-chr --set-missing-var-ids @:# --out $OUTPATH/$OUTFILE
+
+## Same code as above but WITH BALANCED SAMPLE LIST
+## Convert the VCF ("OUTVCF") into PLINK format for ADMIXTURE analysis and keep only the desired individuals ("LIST" that is read in)
+##LIST=balanced_sample_list.list
+# plink2 --threads 1 --vcf $OUTVCF --make-bed --double-id --allow-extra-chr --set-missing-var-ids @:# --keep $OUTPATH/$LIST --out $OUTPATH/$OUTFILE
+
+## ADMIXTURE software doesn't accept non-human chromosome names. Replace the first column by 0.
+cd admixture
+awk '{$1=0;print $0}' all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.bim >all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.bim.tmp
+mv all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.bim.tmp all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.bim.bim
+## IMPORTANT: for the subsequent analysis, we have to use the "bim.bim" file, but we want to keep the original bim file as well. So, you have to rename (mv) the original file to "bim_ORIG" and the "bim.bim" file to only "bim"
+
+exit sinteractive
+##############################################
+
+## Now, we run sbatch 14.2_admixture.sh inside the admixture folder, where the bed files are stored.
+#Here, for each K, the P and Q files are created as well as the log files.
+vim Admixture script 14b.2admixture.sh 
+#################################################################################################################################
+#!/bin/bash -l
+#SBATCH -J admixture
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/admixture_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/admixture_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 01:00:00
+#SBATCH -p small
+#SBATCH --ntasks 1
+#SBATCH --mem=8G
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+# Load modules
+module load biokit
+module load admixture 
+## Note, we use the admixture module here
+
+cd /scratch/project_2009316/EuSamples/06.VCF/admixture
+
+OUTPATH=/scratch/project_2009316/EuSamples/06.VCF/admixture
+FILE=all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb
+
+for i in {1..10}
+do
+admixture --cv $OUTPATH/$FILE.bed $i > log${i}.out
+
+done
+
+grep "CV" *out | awk '{print $3,$4}' | cut -c 4,7-20 > $FILE.cv.error
+
+### END SCRIPT
+#################################################################################################################################
+
+## Note, in the "...cv.error" file, the error rates are stored. The "K" value with the lowest error rates is the best number of populations based in the error rate. Here, it is "3" pops.
+
+##### Now, we want to create an admixture plot. 
+## Before creating the PDF or TIFF of the admixture plot is possible, we need to create a "plotting list". This is a list which includes the species ID, so that they are plotted together. Initially, this may not informative as we may not yet know what sample is what species. So we can simply use the "ID" of the sample, eg. "A_12a...". However, later on, when we are more confident about the species identity/assignment, we can use species ID alongside sample ID.
+## To do this, we need to download the ".fam" files as well as the ".P" and ".Q" files.
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/admixture/* ./ 
+## with the code above, we download all files at aonce!
+# OR
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/admixture/*P ./
+# AND
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/admixture/*Q ./
+# AND
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/admixture/all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.fam ./
+# ALL now under 
+C:\Users\...
+
+-----
+## Now, in R, under "HWE.filtering.R", we need the ".fam" file as well as the "eigenvector" file (may be an Excel file) created for the PCA beforehand. 
+## For this, copy the Excel file "all_samples_DP8_PCA.xlsx" to the same folder and run the R code, which is shown below for consistency
+
+#### START R script ####
+library(dplyr)
+setwd("C:/Users/krapf/OneDrive/D_Uni/Formica_ants/Sequencing/5_Seq_results_18DutchSamples/admixture/")
+fam1 <- read.csv("./all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.fam", sep="\t", header=F)
+#samples <- read.csv("PCA_eigenvector.xlsx", sep="\t")
+samples <- readxl::read_xlsx("all_samples_DP8_PCA.xlsx", sheet=2) ##
+#samples$vcfID...3
+samples_red <- subset(samples, select = c("IID", "Prelim_Species"))
+#colnames(samples_red) <- c("species", "IID")
+samples_red$Prelim_Species
+
+fam1_1 <- as.data.frame(fam1[,1])
+#rio::export(fam1_1, "vcfID.txt")
+colnames(fam1_1) <- c("IID")
+fam1_2 <- left_join(fam1_1, samples_red, by="IID")
+fam1_3 <- fam1_2[,c(1,2)]
+
+#Now, write the file, which we will upload to PUHTI
+write.table(fam1_3, "./all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.cv.plotting.list", quote=FALSE, row.names=F, col.names=F)
+
+#### END R script ####
+
+## Next, we upload the plotting.list file "all_samples_DP8.AN10.noScaff0003.mac2_thin20kb.cv.plotting.list" tp PUHTI
+scp ./all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.cv.plotting.list krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/admixture/
+
+
+################### Again, on the cluster
+## In the next step, we run R script interactively on PUHTI to plot the data using a script created by Joana Meier
+## https://github.com/speciationgenomics/scripts/blob/master/plotADMIXTURE.r
+## Please also see the following site for more information: https://speciationgenomics.github.io/ADMIXTURE/
+## For this, we need to be in the folder where the "plotting.list" and the plink files are stored. We use sinteractive
+## FLAGS -p = prefix; -i = infofile; -k = maxK; -m = minK; -l = populations; -o = OutPrefix
+
+## START sinteractive
+sinteractive -A project_2009316 -c 1 -d 4 -m 1000 -t 00:30:00
+module load r-env
+
+#NOTE: ADMFILE is the prefix, before the P and Q of the files
+ADMFILE=all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb
+ADMLIST=aall_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.cv.plotting.list
+
+#Rscript "./plotADMIXTURE.R" \
+#-p $ADMFILE \
+#-i $ADMLIST -m 1 -k 10 \
+#-l prat,rufa,poly,aqui,lug,admixed1,NA \
+#-o ${ADMFILE}
+
+#Oneliner for sinteractive
+Rscript "./plotADMIXTURE_pdf.R" -p $ADMFILE -i $ADMLIST -m 2 -k 10 -l prat,rufa,poly,aqui,lug,Hybrid,Hybrid2,NA -o ${ADMFILE}  #CHANGE
+#Note: -l is the species names which must be the same as in the "plotting.list" file
+
+## END sinteractive
+
+### Now, we download the pdfs and have a look.
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/filt/results/admixture/*pdf ./
+
+####### END.
