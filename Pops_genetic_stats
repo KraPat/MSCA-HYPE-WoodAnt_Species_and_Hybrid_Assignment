@@ -1,0 +1,112 @@
+tbd
+
+# Define population/species files
+# You can see the species name in your VCF using
+bcftools query -l your_file.vcf.gz > samples.txt
+
+# For VCFtools, you create simple text files listing sample IDs per group, for example:
+species1.txt
+sampleA
+sampleB
+sampleC
+
+species2.txt
+sampleD
+sampleE
+
+#These files are used for PI, FST, etc.
+
+# A) Heterozygosity
+# Individual heterozygosity (per sample)
+# The idea: proportion of heterozygous genotypes across loci.
+# We use PLINK:
+plink --vcf all_samples_filtered.vcf \
+  --double-id \
+  --allow-extra-chr \
+  --het \
+  --out het_stats
+
+# Output het_stats.het gives:
+# observed number of homozygous / heterozygous genotypes per individual
+# F-statistic per individual (inbreeding coefficient)
+
+-------
+
+# B) Nucleotide diversity (π - PI)
+# Nucleotide diversity π measures average pairwise differences per site within a group.
+# Conceptually:
+# π=1(n2)∑i<jkij
+# π=(2n​)1​i<j∑​kij​
+# where kij​ is number of differences between sequences i and j, and n is number of sequences.
+
+## To calculate PI, we  need a VCF file and a file including the sample IDs that are used in the VCF file.
+## PI, aka the nucleotide diversity (π), is the average number of nucleotide differences per site between two sequences, within a population:
+## the total pairwise differences at all sites / number of pairwise comparisons × number of sites
+
+## To extract the IDs, you can use
+bcftools query -l your_file.vcf.gz > samples.txt
+## Then, you check the samples.txt and allocate them. It should look something like a tab-separated file, e.g. "aquiFile":
+sample  population
+ind1    spA
+ind2    spA
+ind3    spA
+ind4    spB
+ind5    spB
+ind6    spB
+
+# We then calcualte per-site π using a sliding-window approach (e.g. 10 kb windows)
+vcftools \
+  --gzvcf data.vcf.gz \
+  --keep pop1.txt \
+  --window-pi 10000 \
+  --window-pi-step 10000 \
+  --out pop1_pi_10kb
+
+# Oneliner:
+# vcftools --gzvcf XXX.vcf.gz --keep aquiFile --window-pi 10000 --window-pi-step 10000 --out aqui_pi_site_10k
+# The akw command below then calculates the average PI across all sites
+# awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' aqui_pi_site_10k.windowed.pi > aqui_pi_site_10k.windowed.pi.value
+# 0.0014027
+
+# We do this separately for each species (or population).
+
+------
+
+# C) FST (between species / populations)
+# FST​ quantifies genetic differentiation among populations. For two species/populations, you treat each species as a “population.”
+# Most commonly, you’ll use Weir & Cockerham’s estimator.
+# For this, we need again 
+# We always compare two populations:
+vcftools --vcf all_samples_filtered.vcf \
+         --weir-fst-pop species1.txt \
+         --weir-fst-pop species2.txt \
+         --out species1_vs_species2_fst
+
+# The output will give per-SNP FST​ plus window-averaged if you provide --fst-window-size.
+# For genome-wide averages, you can take the mean or weighted mean (sum numerator / sum denominator) across loci using R or Python.
+
+---
+
+# D) Tajima’s D (within species/population)
+# Tajima’s D compares:
+# π (average pairwise differences)
+# θW​ (based on number of segregating sites SS)
+# Roughly:
+# D=π−θWVar⁡(π−θW)
+# D=Var(π−θW​)
+​# π−θW​​
+
+# You compute it within a group, typically in windows.
+# First, subset to one species/population, then:
+vcftools --vcf species1.vcf \
+         --TajimaD 10000 \
+         --out species1_TajimaD_10kb
+# 10000 is window size in bp; adjust as needed.
+# Repeat for each species/population.
+
+---
+
+# E) “Between species” diversity: Dxy 
+# PopGenome (R) can compute DxyDxy​:
+# Import your VCF, define two populations (species1, species2).
+# Use functions like diversity.stats() / F_ST.stats() / divergence.stats().
