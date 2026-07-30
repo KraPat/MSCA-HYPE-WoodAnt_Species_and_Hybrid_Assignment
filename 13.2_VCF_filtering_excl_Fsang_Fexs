@@ -308,6 +308,7 @@ OUTPATH=/scratch/project_2009316/EuSamples/06.VCF/pca
 
 # Path to the filtered VCF (incl chromosome 03, 20 kb thinning)
 VCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noCAXY.364inds.AN10.mac2.thin20kb.vcf.gz
+VCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noChrom03.364inds.334inds.AN10.mac2.thin20kb.vcf.gz
 
 # Below, all in a single line
 plink2 --threads 1 --vcf $VCF --double-id --allow-extra-chr --set-missing-var-ids @:# --pca 20 approx --out $OUTPATH/all_364samples_DP8_PCA
