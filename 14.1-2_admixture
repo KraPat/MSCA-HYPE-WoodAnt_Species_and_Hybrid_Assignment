@@ -137,7 +137,7 @@ write.table(fam1_3, "./all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_
 #### END R script ####
 
 ## Next, we upload the plotting.list file "all_samples_DP8.AN10.noScaff0003.mac2_thin20kb.cv.plotting.list" tp PUHTI
-scp ./all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.cv.plotting.list krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/admixture/
+scp ./all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.cv.plotting.list krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/admixture/results/
 
 
 ################### Again, on the cluster
@@ -153,10 +153,10 @@ module load r-env
 
 #NOTE: ADMFILE is the prefix, before the P and Q of the files
 ADMFILE=all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb
-ADMLIST=aall_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.cv.plotting.list
+ADMLIST=all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.cv.plotting.list
 
 #Oneliner for sinteractive
-Rscript "./plotADMIXTURE_pdf.R" -p $ADMFILE -i $ADMLIST -m 2 -k 10 -l Ftrun,Fprat,Frufa,Fpoly,Faqui,Flugu,Adm1,Adm2,_____ -o ${ADMFILE}  #CHANGE
+Rscript "./plotADMIXTURE.R" -p $ADMFILE -i $ADMLIST -m 2 -k 10 -l Ftrun,Fprat,Frufa,Fpoly,Faqui,Flugu,Adm1,Adm2,_____ -o ${ADMFILE}  #CHANGE
 #Note: -l is the species names which must be the same as in the "plotting.list" file
 
 #Rscript "./plotADMIXTURE.R" \
@@ -168,6 +168,6 @@ Rscript "./plotADMIXTURE_pdf.R" -p $ADMFILE -i $ADMLIST -m 2 -k 10 -l Ftrun,Fpra
 ## END sinteractive
 
 ### Now, we download the pdfs and have a look.
-scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/filt/results/admixture/*pdf ./
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/admixture/results/*.pdf ./
 
 ####### END.
