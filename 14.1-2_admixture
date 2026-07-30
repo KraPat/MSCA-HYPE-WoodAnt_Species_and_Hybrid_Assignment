@@ -155,15 +155,15 @@ module load r-env
 ADMFILE=all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb
 ADMLIST=aall_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.cv.plotting.list
 
+#Oneliner for sinteractive
+Rscript "./plotADMIXTURE_pdf.R" -p $ADMFILE -i $ADMLIST -m 2 -k 10 -l Ftrun,Fprat,Frufa,Fpoly,Faqui,Flugu,Adm1,Adm2,_____ -o ${ADMFILE}  #CHANGE
+#Note: -l is the species names which must be the same as in the "plotting.list" file
+
 #Rscript "./plotADMIXTURE.R" \
 #-p $ADMFILE \
 #-i $ADMLIST -m 1 -k 10 \
 #-l prat,rufa,poly,aqui,lug,admixed1,NA \
 #-o ${ADMFILE}
-
-#Oneliner for sinteractive
-Rscript "./plotADMIXTURE_pdf.R" -p $ADMFILE -i $ADMLIST -m 2 -k 10 -l prat,rufa,poly,aqui,lug,trun,Hybrid,Hybrid2,NA -o ${ADMFILE}  #CHANGE
-#Note: -l is the species names which must be the same as in the "plotting.list" file
 
 ## END sinteractive
 
