@@ -21,6 +21,7 @@ OUTPATH=/scratch/project_2009316/EuSamples/06.VCF/pca
 
 # Path to the filtered VCF (incl chromosome 03 excluded, 20 kb thinning)
 VCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noCAXY.mac2.thin20kb.vcf.gz
+VCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noChrom03.mac2.thin20kb.vcf.gz
 
 #plink2 \
 #    --threads 1 \
