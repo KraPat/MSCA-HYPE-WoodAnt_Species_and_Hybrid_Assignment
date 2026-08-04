@@ -171,3 +171,37 @@ Rscript "./plotADMIXTURE.R" -p $ADMFILE -i $ADMLIST -m 2 -k 10 -l Ftrun,Fprat,Fr
 scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/admixture/results/*.pdf ./
 
 ####### END.
+
+
+################### Again, on the cluster - but switched to UvA Crunchomics cluster
+## In the next step, we run R script interactively on PUHTI to plot the data using a script created by Joana Meier
+## https://github.com/speciationgenomics/scripts/blob/master/plotADMIXTURE.r
+## Please also see the following site for more information: https://speciationgenomics.github.io/ADMIXTURE/
+## For this, we need to be in the folder where the "plotting.list" and the plink files are stored. We use sinteractive
+## FLAGS -p = prefix; -i = infofile; -k = maxK; -m = minK; -l = populations; -o = OutPrefix
+
+#NOTE: ADMFILE is the prefix, before the P and Q of the files
+ADMFILE=all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb
+ADMLIST=all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.cv.plotting2.list
+ADMLIST=all_samples_DP8.AN10.376Inds_noChrom03.364inds.AN10.mac2_thin20kb.cv.plotting3.list
+
+#Oneliner for sinteractive
+Rscript "./plotADMIXTURE.R" -p $ADMFILE -i $ADMLIST -m 2 -k 10 -l Ftrun,Fprat,Frufa,Fpoly,FpolyXrufa,Faqui,Flugu,Fpara,Admi1,Admi2 -o ${ADMFILE}  #CHANGE
+Rscript "./plotADMIXTURE.R" -p $ADMFILE -i $ADMLIST -m 2 -k 10 -l Ftrun,Fprat,Frufa,Fpoly,FpolyXrufa,Faqui_FI,Faqui_SE,Faqui_CEU,Flugu,Fpara,Admi1,Admi2 -o ${ADMFILE}
+
+#Note: -l is the species names which must be the same as in the "plotting.list" file
+
+#Rscript "./plotADMIXTURE.R" \
+#-p $ADMFILE \
+#-i $ADMLIST -m 1 -k 10 \
+#-l prat,rufa,poly,aqui,lug,admixed1,NA \
+#-o ${ADMFILE}
+
+## END sinteractive
+
+### Now, we download the pdfs and have a look.
+scp krapfpat@puhti.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/admixture/results/*.pdf ./
+
+####### END.
+
+
