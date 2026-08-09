@@ -37,7 +37,7 @@ cd "$FILT"
 mkdir -p "$FILT" "$TMPDIR"
 cd "$FILT"
 
-# 1. Normalize (including multiallelic splitting) in BCF and convert convert to VCF text for vcfwave
+# 1. Normalize (including multiallelic splitting) in BCF
  #--- It left-aligns indels relative to the reference. -m -both splits multiallelic records (multiple ALT alleles) into multiple biallelic records.
  #--- Importantly: No variant types are removed (SNPs, indels, SVs all kept). And multi-allelic sites are represented as several single-ALT records instead of one multi-ALT record.
 # 2. Decompose alleles (atomize) and sort and save as VCF.gz
