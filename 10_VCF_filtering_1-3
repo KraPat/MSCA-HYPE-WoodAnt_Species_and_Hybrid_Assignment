@@ -43,10 +43,8 @@ cd "$FILT"
 # 2. Decompose alleles (atomize) and sort and save as VCF.gz
  #--- --atomize breaks complex alleles (e.g. MNPs, complex indels) into “atomic” pieces:
  #--- e.g. a complex variant may become a series of simpler SNPs/indels, each with its own record.
- #--- No variant types removed and the representation is more “simple and regular”, which many downstream tools prefer.
-# 3. Strip phasing and patch missing genotype pattern (your existing sed logic)
+# 3. Strip phasing and patch missing genotype pattern
 #--- Removes phase information (e.g. 0|1 → 0/1) and handles missing GT patterns.
-#--- Still no removal of variant categories.
 
 # 1. Normalize
 #bcftools norm -f "$REF" -m -both -O z -o $BASE/06.VCF/filt/all_samples.normalized.vcf.gz "$RAW"
@@ -63,7 +61,6 @@ cd "$FILT"
 
 # 3. strip phasing
 # Apply your phasing removal & missing GT pattern fix
-# (same pattern as in your original script).
 
 bcftools +setGT \
   all_samples.norm.decomp.sorted.vcf.gz \
