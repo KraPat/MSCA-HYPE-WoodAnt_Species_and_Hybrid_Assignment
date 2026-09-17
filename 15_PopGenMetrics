@@ -1,0 +1,74 @@
+# We will calculate multiple population genetic metrics for the different species, such as nucleotide diversity (Pi),
+# heterozygosity, Dxy, Fst (absolute and relative divergence). 
+# For this, we need to extract sample names from the VCF file and calculate the different metrics.
+
+####  Nucleotide diversity (Pi) ####
+## To calculate PI, you can need a VCF file and a file including the sample IDs that are used in the VCF file.
+## PI, aka the nucleotide diversity (π), is the average number of nucleotide differences per site between two sequences, within a population:
+## the total pairwise differences at all sites / number of pairwise comparisons × number of sites
+
+## To extract the IDs, we can use
+bcftools query -l your_file.vcf.gz > samples.txt
+## Then, we check the samples.txt and allocate them manually. The final tab-separated file should look something like, e.g.:
+sample  population
+ind1    spA
+ind2    spA
+ind3    spA
+ind4    spB
+ind5    spB
+ind6    spB
+
+## We will calculate PI using the whole-genome and for sliding windows and present both:
+## We use sinteractive with the default settings for this:
+sinteractive
+## For Population 1
+vcftools \
+  --gzvcf data.vcf.gz \
+  --keep pop1.txt \
+  --site-pi \
+  --out pop1_pi_sites
+## Oneliner
+# vcftools --gzvcf Samples257_DP8.183inds.AN10.noScaff00-03_MS1.vcf.gz --keep aquiFile --site-pi --out aqui_pi_site
+# 0.0521456
+
+# Population 2
+vcftools \
+  --gzvcf data.vcf.gz \
+  --keep pop2.txt \
+  --site-pi \
+  --out pop2_pi_sites
+# vcftools --gzvcf Samples257_DP8.183inds.AN10.noScaff00-03_MS1.vcf.gz --keep adm1File --site-pi --out adm1_pi_site
+# 0.0657245
+
+## For both files, you get PI values all sites in the genome. Using awk below, we calculate the mean over all sites.
+## Note, change the "$3" if necessary, dpeneding where the PI values are in the "XY.sites.pi"-file
+
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' pop1_pi_sites.sites.pi
+
+## NR>1 skips the header.
+## Output: single number = mean π across all listed sites (including those with PI = 0, aka invariant sites).
+## With this, we will receive one genomw-wide PI value for all hybrid or F. aquilonia samples
+
+-----
+## Note: We can also calculate PI for each population in sliding windows
+# Population 1
+vcftools \
+  --gzvcf data.vcf.gz \
+  --keep pop1.txt \
+  --window-pi 10000 \
+  --window-pi-step 10000 \
+  --out pop1_pi_10kb
+# vcftools --gzvcf Samples257_DP8.183inds.AN10.noScaff00-03_MS1.vcf.gz --keep aquiFile --window-pi 10000 --window-pi-step 10000 --out aqui_pi_site_10k
+# awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' aqui_pi_site_10k.windowed.pi > aqui_pi_site_10k.windowed.pi.value
+# 0.0014027
+
+# Population 2
+vcftools \
+  --gzvcf data.vcf.gz \
+  --keep pop2.txt \
+  --window-pi 10000 \
+  --window-pi-step 10000 \
+  --out pop2_pi_10kb
+# vcftools --gzvcf Samples257_DP8.183inds.AN10.noScaff00-03_MS1.vcf.gz --keep adm1File --window-pi 10000 --window-pi-step 10000 --out adm1_pi_site_10k
+# awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' adm1_pi_site_10k.windowed.pi  > adm1_pi_site_10k.windowed.pi.value
+# 0.00168305
