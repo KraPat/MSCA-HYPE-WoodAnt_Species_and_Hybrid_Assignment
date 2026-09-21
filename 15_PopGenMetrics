@@ -31,66 +31,127 @@ vcftools \
   --keep samples_Admi1.txt \
   --site-pi \
   --out Admi1_pi_sites
-## Oneliner
-# vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_Admi1.txt --site-pi --out Admi1_pi_site
 
 ## For each species, we get PI values all sites in the genome. Using awk below, we calculate the mean over all sites.
 ## Note, change the "$3" if necessary, dpeneding where the PI values are in the "XY.sites.pi"-file
 # Admi1
-awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' pop1_pi_sites.sites.pi
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' Admi1_pi_site.sites.pi > Admi1_pi_site.pi.value
 ## NR>1 skips the header.
 ## Output: single number = mean π across all listed sites (including those with PI = 0, aka invariant sites).
 ## With this, we will receive one genomw-wide PI value for all hybrid or F. aquilonia samples
-# 0.0521456
+# 0.0369613
+
+
+FYI: Now working on Roihu
+#Below, we put everything into a bash script
+# 15_CalculatePi.sh
+################################################################################
+#!/bin/bash
+#SBATCH --job-name=CalcPI
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/CalcPi_%A_%a.out  #CHANGE number of samples
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/CalcPi_%A_%a.err  #CHANGE number of samples
+#SBATCH --partition=test ###small
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --time=00:00:10  #01:30:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8
+
+set -euo pipefail
+
+# Load modules
+module load bio-apps
+module load vcftools
+
+## Oneliner
+# vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_Admi1.txt --site-pi --out Admi1_pi_site
+# awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' Admi1_pi_site.sites.pi > Admi1_pi_site.pi.value
 
 # F. aquilonia
 vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_aqui.txt --site-pi --out aqui_pi_site
-awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' aqui_pi_sites.sites.pi
-# 0.0657245
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' aqui_pi_site.sites.pi > aqui_pi_site.pi.value
+# 
+
+# F. aquilonia - Finland
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_aqui.txt --site-pi --out aquiFI_pi_site
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' aquiFI_pi_site.sites.pi > aquiFI_pi_site.pi.value
+# 
+
+# F. aquilonia - Rest
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_aquiRE.txt --site-pi --out aquiRE_pi_site
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' aquiRE_pi_site.sites.pi > aquiRE_pi_site.pi.value
+# 
 
 # F. lugubris
 vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_lugu.txt --site-pi --out lugu_pi_site
-awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' lugu_pi_sites.sites.pi
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' lugu_pi_site.sites.pi > lugu_pi_site.pi.value
 
 # F. paralugubris
 vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_para.txt --site-pi --out para_pi_site
-awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' para_pi_sites.sites.pi
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' para_pi_site.sites.pi > para_pi_site.pi.value
 
 # F. polcytena
 vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_poly.txt --site-pi --out poly_pi_site
-awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' poly_pi_sites.sites.pi
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' poly_pi_site.sites.pi > poly_pi_site.pi.value
 
 # F. polcytena x rufa
 vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_polyXrufa.txt --site-pi --out polyXrufa_pi_site
-awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' polyXrufa_pi_sites.sites.pi
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' polyXrufa_pi_site.sites.pi > polyXrufa_pi_site.pi.value
 
 # F. rufa
 vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_rufa.txt --site-pi --out rufa_pi_site
-awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' rufa_pi_sites.sites.pi
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' rufa_pi_site.sites.pi > rufa_pi_site.pi.value
 
 # F. pratensis
 vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_prat.txt --site-pi --out prat_pi_site
-awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' prat_pi_sites.sites.pi
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' prat_pi_site.sites.pi > prat_pi_site.pi.value
 
 # F. truncorum
 vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_trun.txt --site-pi --out trun_pi_site
-awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' trun_pi_sites.sites.pi
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' trun_pi_site.sites.pi > trun_pi_site.pi.value
 
 -----
 ## Sliding windows
 # Admi1
-# vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_Admi1.txt --window-pi 10000 --window-pi-step 10000 --out Admi1_pi_site_10k
-# awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' Admi1_pi_site_10k.windowed.pi > Admi1_pi_site_10k.windowed.pi.value
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_Admi1.txt --window-pi 10000 --window-pi-step 10000 --out Admi1_pi_site_10k
+awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' Admi1_pi_site_10k.windowed.pi > Admi1_pi_site_10k.windowed.pi.value
 # 0.0014027
 
 F. aquilonia
-# vcftools --gzvcfall_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_aqui.txt --window-pi 10000 --window-pi-step 10000 --out aqui_pi_site_10k
-# awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' aqui_pi_site_10k.windowed.pi  > aqui_pi_site_10k.windowed.pi.value
+vcftools --gzvcfall_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_aqui.txt --window-pi 10000 --window-pi-step 10000 --out aqui_pi_site_10k
+awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' aqui_pi_site_10k.windowed.pi  > aqui_pi_site_10k.windowed.pi.value
 # 0.00168305
 
+# F. lugubris
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_lugu.txt --window-pi 10000 --window-pi-step 10000 --out  --out lugu_pi_site_10k
+awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' lugu_pi_site_10k.windowed.pi > lugu_pi_site_10k.windowed.pi.value
 
+# F. paralugubris
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_para.txt --window-pi 10000 --window-pi-step 10000 --out para_pi_site_10k
+awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' para_pi_site_10k.windowed.pi > para_pi_site_10k.windowed.pi.value
 
+# F. polyctena
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_poly.txt --window-pi 10000 --window-pi-step 10000 --out  poly_pi_site_10k
+awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' poly_pi_site_10k.windowed.pi > poly_pi_site_10k.windowed.pi.value
 
+# F. polcytena x rufa
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_polyXrufa.txt --window-pi 10000 --window-pi-step 10000 --out polyXrufa_pi_site_10k
+awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' polyXrufa_pi_site_10k.windowed.pi > polyXrufa_pi_site_10k.windowed.pi.value
+
+# F. rufa
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_rufa.txt --window-pi 10000 --window-pi-step 10000 --out rufa_pi_site_10k
+awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' rufa_pi_site_10k.windowed.pi > rufa_pi_site_10k.windowed.pi.value
+
+# F. pratensis
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_prat.txt --window-pi 10000 --window-pi-step 10000 --out prat_pi_site_10k
+awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' prat_pi_site_10k.windowed.pi > prat_pi_site_10k.windowed.pi.value
+
+# F. truncorum
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_trun.txt --window-pi 10000 --window-pi-step 10000 --out trun_pi_site_10k
+awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' trun_pi_site_10k.windowed.pi > trunc_pi_site_10k.windowed.pi.value
+
+#End script
 
 --------------------------------------
 ####  Heterozygosity ####
