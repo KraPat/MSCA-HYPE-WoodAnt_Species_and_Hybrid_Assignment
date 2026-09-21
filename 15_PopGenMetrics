@@ -18,57 +18,96 @@ ind4    spB
 ind5    spB
 ind6    spB
 
-## We will calculate PI using the whole-genome and for sliding windows and present both:
+## We will calculate PI using both for the whole-genome and sliding windows:
 ## We use sinteractive with the default settings for this:
+## Whole genome, per species do
 sinteractive
-## For Population 1
+module load bio-apps
+module load vcftools
+
+## For Admixed1
 vcftools \
-  --gzvcf data.vcf.gz \
-  --keep pop1.txt \
+  --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz \
+  --keep samples_Admi1.txt \
   --site-pi \
-  --out pop1_pi_sites
+  --out Admi1_pi_sites
 ## Oneliner
-# vcftools --gzvcf Samples257_DP8.183inds.AN10.noScaff00-03_MS1.vcf.gz --keep aquiFile --site-pi --out aqui_pi_site
-# 0.0521456
+# vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_Admi1.txt --site-pi --out Admi1_pi_site
 
-# Population 2
-vcftools \
-  --gzvcf data.vcf.gz \
-  --keep pop2.txt \
-  --site-pi \
-  --out pop2_pi_sites
-# vcftools --gzvcf Samples257_DP8.183inds.AN10.noScaff00-03_MS1.vcf.gz --keep adm1File --site-pi --out adm1_pi_site
-# 0.0657245
-
-## For both files, you get PI values all sites in the genome. Using awk below, we calculate the mean over all sites.
+## For each species, we get PI values all sites in the genome. Using awk below, we calculate the mean over all sites.
 ## Note, change the "$3" if necessary, dpeneding where the PI values are in the "XY.sites.pi"-file
-
+# Admi1
 awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' pop1_pi_sites.sites.pi
-
 ## NR>1 skips the header.
 ## Output: single number = mean π across all listed sites (including those with PI = 0, aka invariant sites).
 ## With this, we will receive one genomw-wide PI value for all hybrid or F. aquilonia samples
+# 0.0521456
+
+# F. aquilonia
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_aqui.txt --site-pi --out aqui_pi_site
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' aqui_pi_sites.sites.pi
+# 0.0657245
+
+# F. lugubris
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_lugu.txt --site-pi --out lugu_pi_site
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' lugu_pi_sites.sites.pi
+
+# F. paralugubris
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_para.txt --site-pi --out para_pi_site
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' para_pi_sites.sites.pi
+
+# F. polcytena
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_poly.txt --site-pi --out poly_pi_site
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' poly_pi_sites.sites.pi
+
+# F. polcytena x rufa
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_polyXrufa.txt --site-pi --out polyXrufa_pi_site
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' polyXrufa_pi_sites.sites.pi
+
+# F. rufa
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_rufa.txt --site-pi --out rufa_pi_site
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' rufa_pi_sites.sites.pi
+
+# F. pratensis
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_prat.txt --site-pi --out prat_pi_site
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' prat_pi_sites.sites.pi
+
+# F. truncorum
+vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_trun.txt --site-pi --out trun_pi_site
+awk 'NR>1 {sum += $3; n++} END {if (n>0) print sum/n}' trun_pi_sites.sites.pi
 
 -----
-## Note: We can also calculate PI for each population in sliding windows
-# Population 1
-vcftools \
-  --gzvcf data.vcf.gz \
-  --keep pop1.txt \
-  --window-pi 10000 \
-  --window-pi-step 10000 \
-  --out pop1_pi_10kb
-# vcftools --gzvcf Samples257_DP8.183inds.AN10.noScaff00-03_MS1.vcf.gz --keep aquiFile --window-pi 10000 --window-pi-step 10000 --out aqui_pi_site_10k
-# awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' aqui_pi_site_10k.windowed.pi > aqui_pi_site_10k.windowed.pi.value
+## Sliding windows
+# Admi1
+# vcftools --gzvcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_Admi1.txt --window-pi 10000 --window-pi-step 10000 --out Admi1_pi_site_10k
+# awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' Admi1_pi_site_10k.windowed.pi > Admi1_pi_site_10k.windowed.pi.value
 # 0.0014027
 
-# Population 2
-vcftools \
-  --gzvcf data.vcf.gz \
-  --keep pop2.txt \
-  --window-pi 10000 \
-  --window-pi-step 10000 \
-  --out pop2_pi_10kb
-# vcftools --gzvcf Samples257_DP8.183inds.AN10.noScaff00-03_MS1.vcf.gz --keep adm1File --window-pi 10000 --window-pi-step 10000 --out adm1_pi_site_10k
-# awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' adm1_pi_site_10k.windowed.pi  > adm1_pi_site_10k.windowed.pi.value
+F. aquilonia
+# vcftools --gzvcfall_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz --keep samples_aqui.txt --window-pi 10000 --window-pi-step 10000 --out aqui_pi_site_10k
+# awk 'NR>1 {sum += $5; n++} END {if (n>0) print sum/n}' aqui_pi_site_10k.windowed.pi  > aqui_pi_site_10k.windowed.pi.value
 # 0.00168305
+
+
+
+
+
+--------------------------------------
+####  Heterozygosity ####
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
