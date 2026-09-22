@@ -8,7 +8,293 @@
 # Also note, the VCF file is not LD pruned!
 
 
+# Compare FST between species pairs using vcftools
+# following https://speciationgenomics.github.io/per_site_Fst/
 
+# We need species ID files, which we already created
+# samples_Admi1.txt samples_aqui.txt samples_aquiFI.txt (Finnish + RU aquilonia) samples_aquiRE.txt (REmaining of samples) samples_lugu.txt 
+# samples_para.txt samples_prat.txt samples_poly.txt samples_polyXrufa.txt samples_rufa.txt samples_trun.txt
+# THen we can run vcftools
+########################################################################################################################
+#!/bin/bash
+#SBATCH --job-name=CalcFST
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/CalcFST_%A_%a.out  #CHANGE number of samples
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/CalcFST_%A_%a.err  #CHANGE number of samples
+#SBATCH --partition=small
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --time=01:30:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8
+
+set -euo pipefail
+
+# Load modules
+module load bio-apps
+module load vcftools
+
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+
+##### Admi1 vs ... ####
+# Compute FST Admi1 vs aqui
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_aqui.txt \
+--out ./Admi1_aqui
+
+# Compute FST Admi1 vs aquiFI
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_aquiFI.txt \
+--out ./Admi1_aquiFI
+
+# Compute FST Admi1 vs aquiRE
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_aquiRE.txt \
+--out ./Admi1_aquiRE
+
+# Compute FST Admi1 vs lugu
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_lugu.txt \
+--out ./Admi1_lugu
+
+# Compute FST Admi1 vs para
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_para.txt \
+--out ./Admi1_para
+
+# Compute FST Admi1 vs prat
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_prat.txt \
+--out ./Admi1_prat
+
+# Compute FST Admi1 vs poly
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_poly.txt \
+--out ./Admi1_poly
+
+# Compute FST Admi1 vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--out ./Admi1_polyXrufa
+
+# Compute FST Admi1 vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_rufa.txt \
+--out ./Admi1_rufa
+
+# Compute FST Admi1 vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_trun.txt \
+--out ./Admi1_trun
+
+
+##### aqui vs ... ####
+# Compute FST aqui vs aquiFI
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_aquiFI.txt \
+--out ./aqui_aquiFI
+
+# Compute FST aqui vs aquiRE
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_aquiRE.txt \
+--out ./aqui_aquiRE
+
+# Compute FST aqui vs lugu
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_lugu.txt \
+--out ./Admi1_lugu
+
+# Compute FST aqui vs para
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_para.txt \
+--out ./aqui_para
+
+# Compute FST aqui vs prat
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_prat.txt \
+--out ./aqui_prat
+
+# Compute FST aqui vs poly
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_poly.txt \
+--out ./aqui_poly
+
+# Compute FST aqui vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--out ./aqui_polyXrufa
+
+# Compute FST aqui vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_rufa.txt \
+--out ./aqui_rufa
+
+# Compute FST aqui vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_trun.txt \
+--out ./aqui_trun
+
+
+##### lugu vs ... ####
+# Compute FST lugu vs para
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_para.txt \
+--out ./lugu_para
+
+# Compute FST lugu vs prat
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_prat.txt \
+--out ./lugu_prat
+
+# Compute FST lugu vs poly
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_poly.txt \
+--out ./lugu_poly
+
+# Compute FST lugu vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--out ./lugu_polyXrufa
+
+# Compute FST lugu vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_rufa.txt \
+--out ./lugu_rufa
+
+# Compute FST lugu vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_trun.txt \
+--out ./lugu_trun
+
+
+##### para vs ... ####
+# Compute FST lugu vs prat
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_prat.txt \
+--out ./para_prat
+
+# Compute FST para vs poly
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_poly.txt \
+--out ./para_poly
+
+# Compute FST para vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--out ./para_polyXrufa
+
+# Compute FST para vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_rufa.txt \
+--out ./para_rufa
+
+# Compute FST para vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_trun.txt \
+--out ./para_trun
+
+
+##### prat vs ... ####
+# Compute FST prat vs poly
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_prat.txt \
+--weir-fst-pop samples_poly.txt \
+--out ./prat_poly
+
+# Compute FST prat vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_prat.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--out ./prat_polyXrufa
+
+# Compute FST prat vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_prat.txt \
+--weir-fst-pop samples_rufa.txt \
+--out ./prat_rufa
+
+# Compute FST prat vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_prat.txt \
+--weir-fst-pop samples_trun.txt \
+--out ./prat_trun
+
+
+##### poly vs ... ####
+# Compute FST poly vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_poly.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--out ./poly_polyXrufa
+
+# Compute FST poly vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_poly.txt \
+--weir-fst-pop samples_rufa.txt \
+--out ./poly_rufa
+
+# Compute FST poly vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_poly.txt \
+--weir-fst-pop samples_trun.txt \
+--out ./poly_trun
+
+
+##### polyXrufa vs ... ####
+# Compute FST poly vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_polyXrufa.txt \
+--weir-fst-pop samples_rufa.txt \
+--out ./polyXrufa_rufa
+
+# Compute FST polyXrufa vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_polyXrufa.txt \
+--weir-fst-pop samples_trun.txt \
+--out ./polyXrufa_trun
+
+
+##### rufa vs ... ####
+# Compute FST rufa vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_rufa.txt \
+--weir-fst-pop samples_trun.txt \
+--out ./rufa_trun
+
+# END
+
+
+########################################################################################################################
 #!/bin/bash
 #SBATCH --job-name=CalcPI
 #SBATCH --account=project_2009316
