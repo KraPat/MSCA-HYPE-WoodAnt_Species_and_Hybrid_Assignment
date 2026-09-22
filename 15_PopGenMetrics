@@ -1,7 +1,120 @@
 # We will calculate multiple population genetic metrics for the different species, such as nucleotide diversity (Pi),
-# heterozygosity, Dxy, Fst (absolute and relative divergence). 
-# For this, we need to extract sample names from the VCF file and calculate the different metrics.
+# heterozygosity, Dxy, Fst (absolute and relative divergence) using pixy and plink2 and two different VCF files.
+# For pi, dxy, fst, we can use pixy, but for het, we use plink2.
+# One VCF file is the one filtered on individual depth and the other one an upstream file including multiallelic SNPs.
+# We will also do 2 approaches, namely a whole-genome analysis as well as a window-based approach using 50 kb windows.
+# For this, we need to extract sample names from the VCF file to be used to calculate the different metrics.
+# Note, sample sizes will differ between the files because some samples have been excluded in downstream filtering steps.
+# Also note, the VCF file is not LD pruned!
 
+
+
+#!/bin/bash
+#SBATCH --job-name=CalcPI
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/CalcPi_%A_%a.out  #CHANGE number of samples
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/CalcPi_%A_%a.err  #CHANGE number of samples
+#SBATCH --partition=small
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --time=01:30:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8
+
+set -euo pipefail
+
+# Load modules
+module load bio-apps
+module load vcftools
+module load plink
+
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+
+### FILTERED BIALLELIC VCF FILE ###
+## pi, dxy, fst ##
+# Whole-genome approach
+pixy \
+  --vcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz \
+  --populations species_populations.txt \
+  --stats pi dxy fst \
+  --n_cores 8 \
+  --output_folder pixy_genomewide \
+  --output_prefix multispecies_genomewide
+
+# Windowed-appraoch
+pixy \
+  --vcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz \
+  --populations species_populations.txt \
+  --stats pi dxy fst \
+  --window_size 50000 \
+  --n_cores 8 \
+  --output_folder pixy_50kb \
+  --output_prefix multispecies_50kb
+
+
+## HE, HO, ##
+plink2 \
+  --vcf all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz \
+  --snps-only just-acgt \
+  --max-alleles 2 \
+  --het \
+  --out individual_heterozygosity
+
+# Below, we do a calculation in R. Here for the sake of completeness:
+#het <- read.table(
+#  "individual_heterozygosity.het",
+#  header = TRUE,
+#  check.names = TRUE
+#)
+
+#het$Hobs <- 1 - het$O.HOM. / het$N.NM.
+
+## Join this table to your sample metadata and summarise by species or population.
+#library(dplyr)
+#library(readr)
+
+#metadata <- read_tsv(
+#  "species_populations.txt",
+#  col_names = c("sample", "species")
+#)
+
+#het_summary <- het %>%
+#  rename(sample = IID) %>%
+#  left_join(metadata, by = "sample") %>%
+#  group_by(species) %>%
+#  summarise(
+#    n = n(),
+#    mean_Hobs = mean(Hobs, na.rm = TRUE),
+#    sd_Hobs = sd(Hobs, na.rm = TRUE),
+#    se_Hobs = sd_Hobs / sqrt(n),
+#    .groups = "drop"
+#  )
+
+
+### UPSTREAM LESS FILTERED VCF FILE ###
+## pi, dxy, fst ##
+# Whole-genome approach
+pixy \
+  --vcf all_samples.norm.decomp.sorted.nophase.vcf.gz \
+  --populations species_populations.txt \
+  --stats pi dxy fst \
+  --n_cores 8 \
+  --output_folder pixy_genomewide_ \
+  --output_prefix multispecies_genomewide_LessFilteredVCF
+
+# Windowed-appraoch
+pixy \
+  --vcf all_samples.norm.decomp.sorted.nophase.vcf.gz \
+  --populations species_populations.txt \
+  --stats pi dxy fst \
+  --window_size 50000 \
+  --n_cores 8 \
+  --output_folder pixy_50kb \
+  --output_prefix multispecies_50kb_LessFilteredVCF
+
+#Note, we only calculate heterozygosity from the filtered SNP VCF file. 
+
+------------------------------------------------------------------------------------------------------------------
 ####  Nucleotide diversity (Pi) ####
 ## To calculate PI, you can need a VCF file and a file including the sample IDs that are used in the VCF file.
 ## PI, aka the nucleotide diversity (π), is the average number of nucleotide differences per site between two sequences, within a population:
