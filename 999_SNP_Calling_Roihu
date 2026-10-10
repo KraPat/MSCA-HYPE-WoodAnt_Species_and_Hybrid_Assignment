@@ -1,0 +1,331 @@
+# This is a tutorial on how to do SNP calling using freebayes on Roihu.
+# It is similar as previous SNP calling on Puthi, but slighly differs.
+
+# First, lets index BAM files
+# INDEX BAM FILES
+#############################################################################################
+#!/bin/bash
+#SBATCH --job-name=CalcFST
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/CalcFST_%A_%a.out  #CHANGE number of samples
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/CalcFST_%A_%a.err  #CHANGE number of samples
+#SBATCH --partition=small
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --time=01:30:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8
+
+set -euo pipefail
+
+# Load modules
+module load bio-apps
+module load samtools
+
+cd /scratch/project_2009316/EuSamples/05.BAM/BAM_final
+#BAMLIST=/scratch/project_2009316/EuSamples/05.BAM/BAM_final/BAMlist
+
+# Index BAM files first
+for file in $(cat BAMlist); do samtools index $file; done
+echo "$file indexed"
+
+# END
+#############################################################################################
+
+
+#We need to load two module
+module load bio-apps/v202603
+module load freebayes/1.3.6
+
+# After that, we can launch freebayes directly for small job
+freebayes -f reference.fa input.bam > results.vcf
+
+# First, we need again to create a full PATH for the SNP calling
+cd /scratch/project_2009316/EuSamples/05.BAM/BAM_final
+realpath *bam > all.bam.list
+# Then, we need to select the sample we actually want for the SNP calling
+... # do that manually  - final list
+DutchBAMlist
+
+# FreeBayes analysis jobs can be computationally heavy and should be run as batch jobs on Roihu. Below is a sample batch job script:
+#############################################################################################
+#!/bin/bash
+#SBATCH --job-name=freebayes
+#SBATCH --account=project_2009316
+#SBATCH --output=output_%j.txt
+#SBATCH --error=errors_%j.txt
+#SBATCH --time=72:00:00
+#SBATCH --partition=small
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --mem-per-cpu=16000M
+
+module load bio-apps/v202603
+module load freebayes/1.3.6
+module load samtools
+
+cd /scratch/project_2009316/EuSamples/06.VCF
+REF=/scratch/project_2009316/rufaRefGenome
+RES=/scratch/project_2009316/EuSamples/06.VCF/raw
+BAM=/scratch/project_2009316/EuSamples/05.BAM/BAM_final
+BAMLIST=/scratch/project_2009316/EuSamples/05.BAM/BAM_final/BAMlist
+
+ 
+freebayes -regions $REF/Frufa_PR_May2026_v1_2e6_data_regions.txt \
+  -f $REF/Frufa_PR_May2026.fa \
+  -L $BAM/DutchBAMlist \
+  -k --genotype-qualities --skip-coverage 57750 \
+  --limit-coverage 80 \ 
+  --use-best-n-alleles 3 \
+  --ploidy 2 \
+  --min-mapping-quality 20 \
+  --min-base-quality 20 \
+  --max-complex-gap -1 \
+  --haplotype-length -1 \
+  -out $RES/DutchWoodAnts_102026_raw.vcf
+
+echo "SNP CALLING GONE"
+# DONE
+#############################################################################################
+
+
+
+######
+WORK IN PRGRESS BELOW
+############# After the SNP calling, we do some sanity checks.
+## For this, we use sinteractive and various tools:
+
+sinteractive --account project_2009316 --mem 2000
+cd /scratch/project_2009316/EuSamples/06.VCF/raw
+module load biokit
+
+## 1. Inspect the header
+bcftools view -h all_samples_raw.vcf | less
+## fileformat=VCFv4.2 (or similar) exists
+## source=freeBayes is present
+## FORMAT fields like GT, DP, AD, RO, AO are defined
+## Number of sample columns matches your expectations
+
+## 2. Check chromosome naming
+bcftools query -f '%CHROM\n' all_samples_raw.vcf | sort | uniq > all_samples_raw.chroms.txt
+## Look for chr1 vs 1 mixtures.
+
+
+## The next checks take more time and shouldbe done in a batch job
+## "vim 9.0_sanityChecksVCF.sh"
+
+#################################################################################################################################
+
+#!/bin/bash -l
+#SBATCH -J vcf_sanity
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/VCFsanit_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/VCFsanit_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH --time=24:00:00
+#SBATCH -p small
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --mail-type=START,FAIL,END
+
+module load biokit
+
+VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.vcf
+REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
+
+# 3. Check for illegal/suspicious variants
+bcftools norm -c w -f "$REF" "$VCF" > /dev/null
+## This will warn (not modify) about: REF allele mismatches, invalid indels, malformed alleles
+
+
+# 4. Check for obvious duplication / weirdness
+bcftools view -r <chrom_name> all_samples_raw.vcf | wc -l
+## If one chromosome has an absurd number of lines, it might hint at:
+## A per-read or per-allele VCF rather than per-site or something like a bug in the FreeBayes run or input.
+
+
+# 5. Check coordinate ordering
+bcftools sort -c "$VCF" > /dev/null
+## Note: without redirection this will try to write the entire (sorted) VCF to stdout, which is huge.
+## If you just want to check ordering, redirect to /dev/null as above.
+## If there is no output, then it is correclty sorted
+## If there are errors, it needs needs sorting
+
+
+# 6. Summary statistics
+bcftools stats "$VCF" > "${VCF%.vcf}.stats"
+## In the "all_samples_raw.stats" file, information on the number of SNPs, InDels, etc is stored.
+
+
+# 7. check if there are multiple/more maformed records
+#Step 7.1 – Get the number of samples from the header
+NSAMP=$(bcftools query -l all_samples_raw.vcf | wc -l)
+echo "$NSAMP"
+#NSAMP is expected to be 385
+
+#Step 7.22 – Scan for lines with wrong column counts
+NSAMP=$(bcftools query -l all_samples_raw.vcf | wc -l)
+
+awk -v nsamp="$NSAMP" '
+BEGIN { FS = "\t" }
+!/^#/ {
+    expected = 9 + nsamp
+    if (NF != expected) {
+        # Print line number, CHROM, POS, and NF
+        print "LINE", NR, "CHROM", $1, "POS", $2, "NF", NF, "EXPECTED", expected
+    }
+}
+' all_samples_raw.vcf > malformed_records.txt
+
+###### NOTE: there was one position, which was malformed. Besides that, the file looked good.
+# Chr 11 - position 
+# LINE 52384787 CHROM chromosome_11 POS 11604477 NF 8 EXPECTED 394
+
+
+#############
+## Next, we first remove the malformed positon and compress the VCF file to a BCF file. 
+## We use the script below and run it on the cluster
+
+
+vim "9.1_Copy2BCFfile.sh"
+#################################################################################################################################
+
+!/bin/bash -l
+#SBATCH -J VCF_file
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/cp_BCF_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/cp_BCF_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=64G
+#SBATCH --mail-type=START,FAIL,END
+
+# Load bcftools (adjust to your cluster's module/env system)
+module load biokit
+
+ORIGINAL_VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.vcf
+BACKUP_VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.backup.vcf
+FIXED_BCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.bcf
+
+# Malformed site to remove (EDIT chr/pos if needed)
+CHR="chromosome_11"
+POS="11604477"
+
+echo "Original VCF: $ORIGINAL_VCF"
+echo "Backup VCF  : $BACKUP_VCF"
+echo "Fixed BCF   : $FIXED_BCF"
+echo "Removing site: $CHR:$POS"
+
+# 1. Make a backup copy of the original VCF (if not already present)
+#if [ ! -f "$BACKUP_VCF" ]; then
+#       echo "Creating backup VCF at $BACKUP_VCF"
+#       cp "$ORIGINAL_VCF" "$BACKUP_VCF"
+#else
+#       echo "Backup VCF already exists at $BACKUP_VCF; not overwriting."
+#fi
+
+# 2. Filter out the malformed record and convert directly to BCF
+#    - awk keeps all header lines (#...)
+#    - for data lines, it drops the one with CHROM==CHR and POS==POS
+#    - bcftools view reads VCF from stdin (-) and writes BCF
+
+echo "Filtering out $CHR:$POS and writing BCF..."
+
+awk -v chr="$CHR" -v pos="$POS" '
+BEGIN { FS = OFS = "\t" }
+# Keep all header lines as-is
+/^#/ { print; next }
+# For data lines, skip the malformed site; print everything else
+{
+        if (!($1 == chr && $2 == pos)) {
+                print
+        }
+}
+' "$ORIGINAL_VCF" \
+       | bcftools view -Ob -o "$FIXED_BCF" -
+
+
+#############
+## Next, we first do some sanity checks on the BCF file.
+## We use the script below and run it on the cluster
+
+
+vim "9.2_sanityChecksBCF.sh.sh"
+#################################################################################################################################
+
+#!/bin/bash -l
+#SBATCH -J BCF_sanity
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/BCFsanit_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/BCFsanit_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 24:00:00
+#SBATCH -p small
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --mail-type=START,FAIL,END
+
+module load biokit
+
+#VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.vcf
+#REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
+
+# Check for illegal/suspicious variants
+bcftools norm -c w -f /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa \
+    all_samples_raw.fixed.bcf > /dev/null
+
+# output was Lines   total/split/realigned/skipped:  52384499/0/4526134/
+
+#Check stats
+bcftools stats all_samples_raw.fixed.bcf > all_samples_raw.fixed.bcf.stats
+
+## END
+
+#############
+## Next, we first do some sanity checks on the BCF file.
+## We use the script below and run it on the cluster
+
+
+vim "9.3_SortnIndexBCF.sh"
+#################################################################################################################################
+
+#!/bin/bash -l
+#SBATCH -J SortnIndexBCF
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/SortIndex_BCF_%A_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/SortIndex_BCF_%A_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=64G
+#SBATCH --mail-type=START,FAIL,END
+
+# Load bcftools (adjust to your cluster's module/env system)
+module load biokit
+
+#FIXED_BCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.bcf
+
+cd /scratch/project_2009316/EuSamples/06.VCF/raw
+
+# Sort file
+mkdir -p /scratch/project_2009316/EuSamples/06.VCF/raw/tmp_bcftools
+
+bcftools sort \
+    -T /scratch/project_2009316/EuSamples/06.VCF/raw/tmp_bcftools \
+    -Ob -o /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.sorted.bcf \
+    /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.bcf
+
+
+#bcftools sort -Ob -o all_samples_raw.fixed.sorted.bcf all_samples_raw.fixed.bcf
+
+# Index file
+bcftools index /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.sorted.bcf
+
+# Count number of Variants per chromosome
+bcftools query -f '%CHROM\n' /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.sorted.bcf \
+    | sort \
+    | uniq -c \
+    > /scratch/project_2009316/EuSamples/06.VCF/raw/site_count_per_chromosome.tab
+
+## END
+
+
