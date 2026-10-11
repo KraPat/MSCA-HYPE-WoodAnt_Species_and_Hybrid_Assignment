@@ -12,9 +12,19 @@
 # following https://speciationgenomics.github.io/per_site_Fst/
 
 # We need species ID files, which we already created
-# samples_Admi1.txt samples_aqui.txt samples_aquiScand.txt (Finnish + RU aquilonia) samples_aquiCentral.txt (REmaining of samples) samples_lugu.txt 
-# samples_para.txt samples_prat.txt samples_poly.txt samples_polyXrufa.txt samples_rufa.txt samples_trun.txt
-# THen we can run vcftools
+# samples_Admi1.txt
+# samples_aqui.txt
+# samples_aquiScand.txt (Finnish + RU aquilonia)
+# samples_aquiCentral.txt (Central European samples)
+# samples_lugu.txt 
+# samples_para.txt
+# samples_prat.txt
+# samples_poly.txt
+# samples_polyXrufa.txt
+# samples_rufa.txt
+# samples_trun.txt
+# Then we can run vcftools
+
 ########################################################################################################################
 #!/bin/bash
 #SBATCH --job-name=CalcFST
