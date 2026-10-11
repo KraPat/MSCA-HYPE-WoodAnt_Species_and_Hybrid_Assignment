@@ -1,0 +1,233 @@
+
+
+16_SpeciesVCF_QC.sh
+#######################################################################################
+#!/bin/bash
+#SBATCH --job-name=speciesVCF_QC
+#SBATCH --account=project_2009316
+#SBATCH --output=speciesVCF_QC_%A_%a.out
+#SBATCH --error=speciesVCF_QC_%A_%a.err
+#SBATCH --time=00:01:00
+#SBATCH --partition=test  #CHANGE
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=16000M
+##SBATCH --array=1-12%4
+
+# Assumes LISTDIR contains sp1.txt through sp12.txt, one VCF sample ID per line.
+# Produces one species VCF and QC reports per task; does not remove samples.
+# Requires bcftools and Python 3; no VCFtools or external Python packages needed.
+
+set -euo pipefail
+module load bio-apps/v202603
+module load bcftools
+module load python
+
+# Set input
+VCF="/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples.SNPQ30.biall.fixedHeader.indDP.vcf.gz"
+# Proposed directory for your existing sample lists: adjust to their actual location.
+LISTDIR="/scratch/project_2009316/EuSamples/06.VCF/species_lists"
+OUTDIR="/scratch/project_2009316/EuSamples/06.VCF/SpeciesSubsetVCF"
+
+LIST_FILES=(
+    "samples_Admi1.txt"
+    "samples_aquiScand.txt"
+    "samples_lugu.txt"
+    "samples_poly.txt"
+    "samples_prat.txt"
+    "samples_aquiCentral.txt"
+    "samples_aqui.txt"
+    "samples_para.txt"
+    "samples_polyXrufa.txt"
+    "samples_rufa.txt"
+)
+
+command -v bcftools >/dev/null || { echo 'ERROR: bcftools not available; load the appropriate module.' >&2; exit 1; }
+command -v python3 >/dev/null || { echo 'ERROR: python3 not available.' >&2; exit 1; }
+[[ -r "$VCF" ]] || { echo "ERROR: Cannot read $VCF" >&2; exit 1; }
+# Index the INPUT once before submitting the array: bcftools index -f input.vcf.gz
+[[ -r "$VCF.csi" || -r "$VCF.tbi" ]] || { echo 'ERROR: Input VCF needs a readable CSI or TBI index. Index it once before submitting the array.' >&2; exit 1; }
+
+# Reads species lists and creates folders for each VCF
+TASK_ID="${SLURM_ARRAY_TASK_ID:?Submit as a SLURM array}"
+if (( TASK_ID < 1 || TASK_ID > ${#LIST_FILES[@]} )); then
+    echo "ERROR: Task $TASK_ID is outside the sample-list range." >&2
+    exit 1
+fi
+LIST_FILE="${LIST_FILES[$((TASK_ID - 1))]}"
+GROUP="${LIST_FILE#samples_}"
+GROUP="${GROUP%.txt}"
+LIST="$LISTDIR/$LIST_FILE"
+DEST="$OUTDIR/$GROUP"
+mkdir -p "$DEST"
+[[ -r "$LIST" ]] || { echo "ERROR: Cannot read sample list $LIST" >&2; exit 1; }
+
+WORK="$(mktemp -d "$DEST/.work.XXXXXX")"
+trap 'echo "Failure: work files retained in $WORK" >&2' ERR
+export VCF LIST WORK SPECIES DEST
+printf 'Task: %s\nGroup: %s\nSample list: %s\n' "$TASK_ID" "$GROUP" "$LIST"
+
+bcftools query -l "$VCF" > "$WORK/all_samples.txt"
+#bcftools view -h "$VCF" > "$WORK/input_header.txt"
+
+# Clean list formatting, reject duplicates and unknown sample IDs.
+python3 - <<'PY'
+import os
+from pathlib import Path
+w = Path(os.environ['WORK'])
+known = set((w / 'all_samples.txt').read_text().splitlines())
+samples = []
+for line in Path(os.environ['LIST']).read_text(encoding='utf-8-sig').splitlines():
+    sample = line.strip()
+    if not sample or sample.startswith('#'):
+        continue
+    if len(sample.split()) != 1:
+        raise SystemExit(f'ERROR: Expected one sample ID per line: {sample!r}')
+    samples.append(sample)
+if not samples:
+    raise SystemExit('ERROR: Empty species sample list.')
+if len(samples) != len(set(samples)):
+    raise SystemExit('ERROR: Duplicate IDs in species sample list.')
+missing = sorted(set(samples) - known)
+if missing:
+    raise SystemExit('ERROR: IDs not in VCF: ' + ', '.join(missing))
+(w / 'samples.txt').write_text('\n'.join(samples) + '\n')
+print(f"{os.environ['SPECIES']}: validated {len(samples)} samples", flush=True)
+PY
+
+# Preserve ALL records and allele representations for comparable initial QC.
+# Do not trim ALT alleles or drop sites monomorphic within this species yet.
+# bcftools recalculates existing INFO/AC and INFO/AN during sample subsetting.
+bcftools view -S "$WORK/samples.txt" -Oz -o "$WORK/subset.vcf.gz" "$VCF"
+bcftools index -f "$WORK/subset.vcf.gz"
+bcftools query -l "$WORK/subset.vcf.gz" > "$WORK/output_samples.txt"
+bcftools stats -s - "$WORK/subset.vcf.gz" > "$WORK/bcftools_stats.txt"
+bcftools view -h "$WORK/subset.vcf.gz" > "$WORK/subset_header.txt"
+
+# Query GT plus optional FORMAT/DP and FORMAT/GQ only when present.
+# Stream genotypes into Python so the whole genotype matrix is never held in RAM.
+python3 - <<'PY'
+import os
+import re
+import csv
+import math
+import subprocess
+from pathlib import Path
+
+w = Path(os.environ['WORK'])
+species = os.environ['SPECIES']
+samples = (w / 'output_samples.txt').read_text().splitlines()
+header = (w / 'subset_header.txt').read_text()
+if not re.search(r'^##FORMAT=<ID=GT[,>]', header, re.M):
+    raise SystemExit('ERROR: VCF has no FORMAT/GT.')
+has_dp = bool(re.search(r'^##FORMAT=<ID=DP[,>]', header, re.M))
+has_gq = bool(re.search(r'^##FORMAT=<ID=GQ[,>]', header, re.M))
+fmt = '%CHROM\t%POS\t%REF\t%ALT[\t%GT'
+if has_dp:
+    fmt += '\t%DP'
+if has_gq:
+    fmt += '\t%GQ'
+fmt += ']\n'
+width = 1 + int(has_dp) + int(has_gq)
+metrics = [dict(n=0, complete=0, partial=0, absent=0, diploid=0, het=0,
+                dp_n=0, dp_sum=0.0, dp_lt5=0, dp_lt10=0,
+                gq_n=0, gq_sum=0.0, gq_lt20=0, gq_lt30=0) for _ in samples]
+
+def numeric(text):
+    try:
+        value = float(text)
+        return value if math.isfinite(value) and value >= 0 else None
+    except ValueError:
+        return None
+
+    # These include sites monomorphic or wholly missing within a species.
+    if len(ref) != 1 or len(alt) != 1 or ref.upper() not in 'ACGT' or alt.upper() not in 'ACGT':
+        continue
+    for i, m in enumerate(metrics):
+        offset = 4 + i * width
+        gt = fields[offset]
+        alleles = re.split(r'[/|]', gt)
+        missing = sum(a == '.' for a in alleles)
+        m['n'] += 1
+        if missing == len(alleles):
+            m['absent'] += 1
+            continue
+        if missing:
+            m['partial'] += 1
+            continue
+        m['complete'] += 1
+        if len(alleles) == 2:
+            m['diploid'] += 1
+            m['het'] += int(alleles[0] != alleles[1])
+        j = offset + 1
+        if has_dp:
+            dp = numeric(fields[j])
+            j += 1
+            if dp is not None:
+                m['dp_n'] += 1
+                m['dp_sum'] += dp
+                m['dp_lt5'] += int(dp < 5)
+                m['dp_lt10'] += int(dp < 10)
+        if has_gq:
+            gq = numeric(fields[j])
+            if gq is not None:
+                m['gq_n'] += 1
+                m['gq_sum'] += gq
+                m['gq_lt20'] += int(gq < 20)
+                m['gq_lt30'] += int(gq < 30)
+if proc.wait() != 0:
+    raise SystemExit('ERROR: bcftools genotype query failed.')
+if not metrics or metrics[0]['n'] == 0:
+    raise SystemExit('ERROR: No canonical biallelic SNP records found for QC.')
+
+
+def ratio(a, b):
+    return round(a / b, 6) if b else 'NA'
+
+columns = ['species', 'sample_id', 'n_biallelic_snp_records', 'n_complete_GT',
+           'n_partial_missing_GT', 'n_fully_missing_GT', 'missing_GT_fraction',
+           'n_complete_diploid_GT', 'n_heterozygous_GT', 'heterozygosity_called_diploid_SNPs',
+           'n_called_GT_with_DP', 'mean_DP_called_GT', 'fraction_DP_lt5', 'fraction_DP_lt10',
+           'n_called_GT_with_GQ', 'mean_GQ_called_GT', 'fraction_GQ_lt20', 'fraction_GQ_lt30']
+with (w / 'sample_QC.tsv').open('w', newline='') as handle:
+    writer = csv.writer(handle, delimiter='\t')
+    writer.writerow(columns)
+    for sample, m in zip(samples, metrics):
+        writer.writerow([species, sample, m['n'], m['complete'], m['partial'], m['absent'],
+                         ratio(m['partial'] + m['absent'], m['n']), m['diploid'], m['het'],
+                         ratio(m['het'], m['diploid']), m['dp_n'], ratio(m['dp_sum'], m['dp_n']),
+                         ratio(m['dp_lt5'], m['dp_n']), ratio(m['dp_lt10'], m['dp_n']),
+                         m['gq_n'], ratio(m['gq_sum'], m['gq_n']),
+                         ratio(m['gq_lt20'], m['gq_n']), ratio(m['gq_lt30'], m['gq_n'])])
+(w / 'QC_notes.txt').write_text(
+    f'FORMAT/DP present: {has_dp}\nFORMAT/GQ present: {has_gq}\n'
+    'QC uses input canonical biallelic SNP records, including within-species monomorphic sites.\n'
+    'Partial-missing genotypes count as missing. DP/GQ summaries use complete GT only and available tag values.\n'
+    'Heterozygosity denominator is complete diploid GT; it is NOT nucleotide diversity.\n'
+    'Depth at variant records is NOT genome-wide BAM coverage.\n'
+    'DP/GQ cutoffs are descriptive diagnostics, not automatic exclusion criteria.\n'
+    'Variant-only missingness is affected by ascertainment; use BAM QC for broader coverage assessment.\n'
+    'No samples, sites, or genotypes have been filtered by this script.\n')
+print(f'QC complete: {len(samples)} samples; {metrics[0]["n"]} biallelic SNP records.', flush=True)
+PY
+
+# These outputs replace prior outputs for this species if rerun.
+mv -f "$WORK/subset.vcf.gz" "$DEST/$SPECIES.subset.vcf.gz"
+mv -f "$WORK/subset.vcf.gz.csi" "$DEST/$SPECIES.subset.vcf.gz.csi"
+cp "$WORK/samples.txt" "$DEST/$SPECIES.requested_samples.txt"
+cp "$WORK/output_samples.txt" "$DEST/$SPECIES.vcf_samples.txt"
+cp "$WORK/bcftools_stats.txt" "$DEST/$SPECIES.bcftools_stats.txt"
+cp "$WORK/sample_QC.tsv" "$DEST/$SPECIES.sample_QC.tsv"
+cp "$WORK/QC_notes.txt" "$DEST/$SPECIES.QC_notes.txt"
+rm -rf -- "$WORK"
+trap - ERR
+printf 'COMPLETE: %s\nSpecies VCF and QC reports: %s\n' "$SPECIES" "$DEST"
+
+# AFTER ALL TASKS SUCCEED, combine sample QC tables with this single-line command:
+# awk 'FNR==1 && NR!=1 {next} {print}' /scratch/project_2009316/EuSamples/06.VCF/species_QC/sp*/sp*.sample_QC.tsv > /scratch/project_2009316/EuSamples/06.VCF/species_QC/all_species.sample_QC.tsv
+
+
+
+
+
