@@ -225,7 +225,7 @@ trap - ERR
 printf 'COMPLETE: %s\nSpecies VCF and QC reports: %s\n' "$SPECIES" "$DEST"
 
 # AFTER ALL TASKS SUCCEED, combine sample QC tables with this single-line command:
-# awk 'FNR==1 && NR!=1 {next} {print}' /scratch/project_2009316/EuSamples/06.VCF/species_QC/sp*/sp*.sample_QC.tsv > /scratch/project_2009316/EuSamples/06.VCF/species_QC/all_species.sample_QC.tsv
+# awk 'FNR==1 && NR!=1 {next} {print}' /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/{Admi1,aquiScand,lugu,poly,prat,aquiCentral,aqui,para,polyXrufa,rufa}/*.sample_QC.tsv > /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/all_groups.sample_QC.tsv
 
 
 
