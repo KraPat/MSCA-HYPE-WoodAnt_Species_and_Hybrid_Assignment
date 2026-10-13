@@ -25,6 +25,7 @@
 # samples_trun.txt
 # Then we can run vcftools
 
+15.2_
 ########################################################################################################################
 #!/bin/bash
 #SBATCH --job-name=CalcFST
@@ -398,6 +399,441 @@ vcftools --gzvcf ${VCF} \
 --out $OUTDIR/aquiScand_aquiCentral
 
 # END
+
+
+#Now, we calcualte a windowed FST value with 50 kb windows and 10kn FST window steps
+15.2.1_Calculate_windowedFst.sh
+#####################################
+#!/bin/bash
+#SBATCH --job-name=CalcWindFST
+#SBATCH --account=project_2009316
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/CalcWindFST_%A_%a.out  #CHANGE number of samples
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/CalcWindFST_%A_%a.err  #CHANGE number of samples
+#SBATCH --partition=small
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --time=05:30:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8
+
+set -euo pipefail
+
+# Load modules
+module load bio-apps
+module load vcftools
+
+cd /scratch/project_2009316/EuSamples/06.VCF/filt
+OUTDIR=/scratch/project_2009316/EuSamples/06.VCF/filt/PopGenMetrics/Fst
+VCF=/scratch/project_2009316/EuSamples/06.VCF/filt/all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz
+
+
+##### Admi1 vs ... ####
+# Compute FST Admi1 vs aqui
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_aqui.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/Admi1_aqui_50kb
+
+# Compute FST Admi1 vs aquiScand
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_aquiScand.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/Admi1_aquiScand_50kb
+
+# Compute FST Admi1 vs aquiCentral
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_aquiCentral.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/Admi1_aquiCentral_50kb
+
+ Compute FST Admi1 vs lugu
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_lugu.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/Admi1_lugu_50kb
+
+# Compute FST Admi1 vs para
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_para.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/Admi1_para_50kb
+
+# Compute FST Admi1 vs prat
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_prat.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/Admi1_prat_50kb
+
+# Compute FST Admi1 vs poly
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_poly.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/Admi1_poly_50kb
+
+# Compute FST Admi1 vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/Admi1_polyXrufa_50kb
+
+# Compute FST Admi1 vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_rufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/Admi1_rufa_50kb
+
+# Compute FST Admi1 vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_trun.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/Admi1_trun_50kb
+
+
+##### aqui vs ... ####
+# Compute FST aqui vs aquiScand
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_aquiScand.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/aqui_aquiScand_50kb
+
+# Compute FST aqui vs aquiCentral
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_aquiCentral.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/aqui_aquiCentral_50kb
+
+# Compute FST aqui vs lugu
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_Admi1.txt \
+--weir-fst-pop samples_lugu.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/aqui_lugu_50kb
+
+# Compute FST aqui vs para
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_para.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/aqui_para_50kb
+
+# Compute FST aqui vs prat
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_prat.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/aqui_prat_50kb
+
+# Compute FST aqui vs poly
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_poly.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/aqui_poly_50kb
+
+# Compute FST aqui vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/aqui_polyXrufa_50kb
+
+# Compute FST aqui vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_rufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/aqui_rufa_50kb
+
+# Compute FST aqui vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aqui.txt \
+--weir-fst-pop samples_trun.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/aqui_trun_50kb
+
+
+##### lugu vs ... ####
+# Compute FST lugu vs aquiScand
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_aquiScand.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/lugu_aquiScand_50kb
+
+# Compute FST lugu vs aquiCentral
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_aquiCentral.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/lugu_aquiCentral_50kb
+
+# Compute FST lugu vs para
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_para.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/lugu_para_50kb
+
+# Compute FST lugu vs prat
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_prat.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/lugu_prat_50kb
+
+# Compute FST lugu vs poly
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_poly.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/lugu_poly_50kb
+
+# Compute FST lugu vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/lugu_polyXrufa_50kb
+
+# Compute FST lugu vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_rufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/lugu_rufa_50kb
+
+# Compute FST lugu vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_lugu.txt \
+--weir-fst-pop samples_trun.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/lugu_trun_50kb
+
+#### para vs ... ####
+# Compute FST para vs aquiScand
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_aquiScand.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/para_aquiScand_50kb
+
+# Compute FST para vs aquiCentral
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_aquiCentral.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/para_aquiCentral_50kb
+
+# Compute FST para vs prat
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_prat.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/para_prat_50kb
+
+# Compute FST para vs poly
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_poly.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/para_poly_50kb
+
+# Compute FST para vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/para_polyXrufa_50kb
+
+# Compute FST para vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_rufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/para_rufa_50kb
+
+# Compute FST para vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_para.txt \
+--weir-fst-pop samples_trun.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/para_trun_50kb
+
+
+##### prat vs ... ####
+# Compute FST prat vs aquiScand
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_prat.txt \
+--weir-fst-pop samples_aquiScand.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/prat_aquiScand_50kb
+
+# Compute FST prat vs aquiCentral
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_prat.txt \
+--weir-fst-pop samples_aquiCentral.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/prat_aquiCentral_50kb
+
+# Compute FST prat vs poly
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_prat.txt \
+--weir-fst-pop samples_poly.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/prat_poly_50kb
+
+# Compute FST prat vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_prat.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/prat_polyXrufa_50kb
+
+# Compute FST prat vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_prat.txt \
+--weir-fst-pop samples_rufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/prat_rufa_50kb
+
+ Compute FST prat vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_prat.txt \
+--weir-fst-pop samples_trun.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/prat_trun_50kb
+
+
+##### poly vs ... ####
+# Compute FST poly vs aquiScand
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_poly.txt \
+--weir-fst-pop samples_aquiScand.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/poly_aquiScand_50kb
+
+# Compute FST poly vs aquiCentral
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_poly.txt \
+--weir-fst-pop samples_aquiCentral.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/poly_aquiCentral_50kb
+
+# Compute FST poly vs polyXrufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_poly.txt \
+--weir-fst-pop samples_polyXrufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/poly_polyXrufa_50kb
+
+# Compute FST poly vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_poly.txt \
+--weir-fst-pop samples_rufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/poly_rufa_50kb
+
+# Compute FST poly vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_poly.txt \
+--weir-fst-pop samples_trun.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/poly_trun_50kb
+
+##### polyXrufa vs ... ####
+# Compute FST polyXrufa vs aquiScand
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_polyXrufa.txt \
+--weir-fst-pop samples_aquiScand.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/polyXrufa_aquiScand_50kb
+
+# Compute FST polyXrufa vs aquiCentral
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_polyXrufa.txt \
+--weir-fst-pop samples_aquiCentral.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/polyXrufaaquiCentral_50kb
+
+# Compute FST poly vs rufa
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_polyXrufa.txt \
+--weir-fst-pop samples_rufa.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/polyXrufa_rufa_50kb
+
+# Compute FST polyXrufa vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_polyXrufa.txt \
+--weir-fst-pop samples_trun.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/polyXrufa_trun_50kb
+
+
+##### rufa vs ... ####
+# Compute FST rufa vs aquiScand
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_rufa.txt \
+--weir-fst-pop samples_aquiScand.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/rufa_aquiScand_50kb
+
+# Compute FST rufa vs aquiCentral
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_rufa.txt \
+--weir-fst-pop samples_aquiCentral.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/rufa_aquiCentral_50kb
+
+# Compute FST rufa vs trun
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_rufa.txt \
+--weir-fst-pop samples_trun.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/rufa_trun_50kb
+
+
+##### trun vs ... ####
+# Compute FST trun vs aquiScand
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_trun.txt \
+--weir-fst-pop samples_aquiScand.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/trun_aquiScand_50kb
+
+# Compute FST trun vs aquiCentral
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_trun.txt \
+--weir-fst-pop samples_aquiCentral.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/trun_aquiCentral_50kb
+
+
+##### aquiScand vs ... ####
+# Compute FST aquiScand vs aquiCentral
+vcftools --gzvcf ${VCF} \
+--weir-fst-pop samples_aquiScand.txt \
+--weir-fst-pop samples_aquiScand.txt \
+--fst-window-size 50000 --fst-window-step 10000 \
+--out $OUTDIR/aquiScand_aquiCentral_50kb
+
+# END
+#######
+
+
+
 
 
 ########################################################################################################################
