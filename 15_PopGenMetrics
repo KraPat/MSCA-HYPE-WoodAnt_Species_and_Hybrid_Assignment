@@ -869,17 +869,19 @@ chromosome_20   0.0     146.17940199335547
 chromosome_11   0.0     175.41528239202657
 chromosome_2    0.0     352.49169435215947
 
-
+######
+#Now, we calcualte heterozygosity per species
+Save the script as 15.3_Calculate_HetRoh.sh, check SAMPLE_DIR, and submit it with the VCF filename, e.g.
+sbatch 15.3_Calculate_Het.sh /scratch/project_2009316/EuSamples/06.VCF/filt/your_filtered_file.vcf.gz
+all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz
 
 15.3_Calculate_Het.sh
-Save the script as 15.3_Calculate_HetRoh.sh, check SAMPLE_DIR, and submit it with the VCF filename, e.g.
-sbatch 15.3_Calculate_HetRoh.sh /scratch/project_2009316/EuSamples/06.VCF/filt/your_filtered_file.vcf.gz
 ########################################################################################################################
 #!/bin/bash
-#SBATCH --job-name=Het_ROH
+#SBATCH --job-name=IndividualHet
 #SBATCH --account=project_2009316
-#SBATCH --output=/scratch/project_2009316/EuSamples/06.VCF/logs/Het_ROH_%j.out
-#SBATCH --error=/scratch/project_2009316/EuSamples/06.VCF/logs/Het_ROH_%j.err
+#SBATCH --output=/scratch/project_2009316/EuSamples/06.VCF/logs/IndividualHet_%j.out
+#SBATCH --error=/scratch/project_2009316/EuSamples/06.VCF/logs/IndividualHet_%j.err
 #SBATCH --partition=small
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -888,139 +890,186 @@ sbatch 15.3_Calculate_HetRoh.sh /scratch/project_2009316/EuSamples/06.VCF/filt/y
 #SBATCH --mem=8G
 
 set -euo pipefail
-
 module load bio-apps
 module load bcftools
 module load vcftools
 
-# Usage: sbatch Het_ROH.sh /absolute/path/to/filtered.vcf.gz
-# The SLURM logs directory must exist BEFORE submitting the job.
-VCF="${1:?Usage: sbatch Het_ROH.sh /absolute/path/to/filtered.vcf.gz}"
+# Save as 01_individual_HET.sh
+# Submit: sbatch 01_individual_HET.sh /absolute/path/to/filtered.vcf.gz
+# Create the SLURM logs directory before submission.
+# Use autosomal diploid samples/regions only: exclude haploid males and mtDNA.
+VCF="${1:?Usage: sbatch 01_individual_HET.sh /absolute/path/to/filtered.vcf.gz}"
 BASE=/scratch/project_2009316/EuSamples/06.VCF/filt
 SAMPLE_DIR="$BASE"
-OUTDIR="$BASE/PopGenMetrics/Het_ROH"
+OUTDIR="$BASE/PopGenMetrics/IndividualHET"
 mkdir -p "$OUTDIR"
 [[ -r "$VCF" ]] || { echo "Cannot read VCF: $VCF" >&2; exit 1; }
-
-# Analyze each samples_SPECIES.txt file separately.
-# Change SAMPLE_DIR above if your lists are elsewhere.
-# If that directory contains non-species lists with the same naming pattern,
-# replace the automatic discovery below with an explicit array of filenames.
 shopt -s nullglob
+# Ensure this pattern matches ONLY intended species lists, one sample per line.
 LISTS=("$SAMPLE_DIR"/samples_*.txt)
-((${#LISTS[@]} > 0)) || { echo "No samples_*.txt files found" >&2; exit 1; }
-
-# ROH settings: exploratory starting values, NOT validated for these insects.
-# Prefer a species-specific recombination map when available.
-GT_ERROR_PHRED=30          # GT-only model: assumed error probability 0.001
-MIN_CALL_FRACTION=0.80      # Fraction of diploid allele copies called per ROH marker
-MIN_ROH_BP=100000          # Post-filter: minimum physical length
-MIN_ROH_MARKERS=50         # Post-filter: minimum number of markers
-MIN_ROH_QUALITY=20         # Post-filter: minimum bcftools region quality
-
-# This reorders your columns and produces one map file per chromosome:
-RECMAP=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.recmap
-MAPDIR="$OUTDIR/recombination_maps"
-mkdir -p "$MAPDIR"
-
-awk 'BEGIN {OFS="\t"} NR>1 && NF==4 {print $1,$2,$3,$4}' "$RECMAP" | LC_ALL=C sort -k1,1 -k2,2n > "$MAPDIR/map_sorted.tsv"
-
-# Stop for duplicate positions, decreasing cumulative cM or flat chromosomes.
-awk '{c=$1; if(c in n) {if($2<=pos[c] || $3<cm[c]) {print "Invalid map order: " c ":" $2 > "/dev/stderr"; bad=1}} else first[c]=$3; n[c]++; pos[c]=$2; cm[c]=$3} END {for(c in n) if(n[c]<2 || cm[c]<=first[c]) {print "No cumulative cM increase: " c > "/dev/stderr"; bad=1} exit bad}' "$MAPDIR/map_sorted.tsv"
-
-awk -v dir="$MAPDIR" 'BEGIN {OFS="\t"} {c=$1; f=dir "/" c ".map"; if(!(c in seen)) {print "Position(bp)","Rate(cM/Mb)","Map(cM)" > f; close(f); seen[c]=1} print $2,$4,$3 >> f; close(f)}' "$MAPDIR/map_sorted.tsv"
-                                                                                                                                                                 # This workflow is for autosomal diploid genotypes. It counts only fully called
-# diploid GTs for observed heterozygosity, reporting skipped GTs explicitly.
-# Do not use pooled haploid/diploid or sex-chromosome data for --het / ROH here.
-# Restrict the input VCF to the appropriate diploid chromosomes beforehand.
-
-printf 'Species\tSample\tN_called_diploid_SNPs\tN_heterozygous_SNPs\tH_obs_retained_SNPs\tN_missing_or_non_diploid_SNPs\tF_VCFtools\tN_sites_F\tN_ROH\tTotal_ROH_bp\tLongest_ROH_bp\n' > "$OUTDIR/individual_summary.tsv"
+((${#LISTS[@]} > 0)) || { echo "No species sample lists found" >&2; exit 1; }
+printf 'Species\tSample\tN_called_diploid_SNPs\tN_heterozygous_SNPs\tH_obs_retained_SNPs\tN_missing_or_non_diploid_SNPs\tF_VCFtools\tN_sites_F\n' > "$OUTDIR/individual_HET_summary.tsv"
 
 for LIST in "${LISTS[@]}"; do
     SPECIES=$(basename "$LIST" .txt)
     SPECIES=${SPECIES#samples_}
     WORK="$OUTDIR/$SPECIES"
     mkdir -p "$WORK"
-
-    # Normalize one-sample-per-line lists (remove CRLF / empty lines).
     awk 'NF {gsub(/\r/, ""); print $1}' "$LIST" > "$WORK/samples.txt"
     N=$(wc -l < "$WORK/samples.txt")
-    ((N >= 2)) || { echo "Need at least two samples for $SPECIES; skipping" >&2; continue; }
-    echo "Processing $SPECIES ($N samples)"
+    ((N >= 2)) || { echo "Skipping $SPECIES: need at least two samples for F" >&2; continue; }
+    [[ $(sort -u "$WORK/samples.txt" | wc -l) -eq "$N" ]] || { echo "Duplicate sample IDs for $SPECIES" >&2; exit 1; }
+    echo "Processing $SPECIES: $N samples"
 
-    # Preserve ALL retained input biallelic SNP sites, including sites fixed
-    # within this species. Recalculate AF and AN from this species' genotypes.
-    bcftools view -S "$WORK/samples.txt" -m2 -M2 -v snps -Ou "$VCF" | bcftools +fill-tags -Oz -o "$WORK/retained_sites.vcf.gz" -- -t AF,AN
+    # Preserve species-fixed sites for observed SNP heterozygosity.
+    bcftools view -S "$WORK/samples.txt" -m2 -M2 -v snps -Oz -o "$WORK/retained_sites.vcf.gz" "$VCF"
     bcftools index -f "$WORK/retained_sites.vcf.gz"
+    N_SITES=$(bcftools index -n "$WORK/retained_sites.vcf.gz")
+    ((N_SITES > 0)) || { echo "No retained SNPs for $SPECIES" >&2; exit 1; }
 
-    # Direct GT counting ensures the observed-H denominator is ALL called,
-    # retained diploid SNP sites, not just sites polymorphic within the species.
-    # Count missing/partial/haploid genotypes as skipped, not as homozygotes.
+    # Directly count fully called biallelic diploid GTs at all retained sites.
     bcftools query -f '[%SAMPLE\t%GT\n]' "$WORK/retained_sites.vcf.gz" | awk 'BEGIN {OFS="\t"; print "Sample","N_called_diploid_SNPs","N_heterozygous_SNPs","H_obs_retained_SNPs","N_missing_or_non_diploid_SNPs"} {s=$1; seen[s]=1; n=split($2,a,/[|\/]/); if(n==2 && a[1] ~ /^[01]$/ && a[2] ~ /^[01]$/) {called[s]++; if(a[1]!=a[2]) het[s]++} else skipped[s]++} END {for(s in seen) print s,called[s]+0,het[s]+0,(called[s]>0 ? (het[s]+0)/called[s] : "NA"),skipped[s]+0}' > "$WORK/observed_heterozygosity.tsv"
 
-    # F is estimated relative to allele frequencies in this species subset.
-    # Use the same retained panel as above; monomorphic sites carry no expected
-    # heterozygosity information. This is not a pedigree inbreeding estimate.
     vcftools --gzvcf "$WORK/retained_sites.vcf.gz" --het --out "$WORK/inbreeding"
 
-    # Only species-polymorphic, sufficiently called markers inform ROH.
-    # No extra MAF cutoff: rare alleles can be informative for ROH.
-    bcftools view -i "INFO/AF>0 && INFO/AF<1 && INFO/AN>=2*$N*$MIN_CALL_FRACTION" -Oz -o "$WORK/roh_markers.vcf.gz" "$WORK/retained_sites.vcf.gz"
-    bcftools index -f "$WORK/roh_markers.vcf.gz"
-    N_MARKERS=$(bcftools index -n "$WORK/roh_markers.vcf.gz")
-    echo "$SPECIES: $N_MARKERS polymorphic markers retained for ROH"
-
-# Region-only report; use the chromosome-specific recombination maps.
-# -G ignores genotype likelihoods and applies the assumed GT error model.
-if ((N_MARKERS > 0)); then
-    # Check that every chromosome with ROH markers has a map.
-    bcftools index -s "$WORK/roh_markers.vcf.gz" | awk '$3>0 {print $1}' > "$WORK/roh_chromosomes.txt"
-
-    while IFS= read -r CHR; do
-        [[ -s "$MAPDIR/$CHR.map" ]] || { echo "Missing recombination map for $CHR" >&2; exit 1; }
-    done < "$WORK/roh_chromosomes.txt"
-
-    bcftools roh --AF-tag AF -G "$GT_ERROR_PHRED" --genetic-map "$MAPDIR/{CHROM}.map" -O r -o "$WORK/roh_raw.txt" "$WORK/roh_markers.vcf.gz"
-else
-    echo "WARNING: no informative ROH markers for $SPECIES" >&2
-    : > "$WORK/roh_raw.txt"
-fi
-
-    # Keep the raw report for sensitivity analysis; create a filtered table.
-    awk -v bp="$MIN_ROH_BP" -v markers="$MIN_ROH_MARKERS" -v q="$MIN_ROH_QUALITY" 'BEGIN {OFS="\t"; print "Record","Sample","CHROM","Start","End","Length_bp","N_markers","Quality"} $1=="RG" && $6>=bp && $7>=markers && $8>=q {print $1,$2,$3,$4,$5,$6,$7,$8}' "$WORK/roh_raw.txt" > "$WORK/roh_filtered.tsv"
-
-    # Include all samples, even those with no retained ROH.
-    # Zero means no detected/retained ROH; it does not prove absence of inbreeding.
-    awk 'BEGIN {OFS="\t"; print "Sample","N_ROH","Total_ROH_bp","Longest_ROH_bp"} FILENAME==ARGV[1] {samples[$1]=1; next} FILENAME==ARGV[2] && FNR>1 {s=$2; n[s]++; total[s]+=$6; if($6>longest[s]) longest[s]=$6} END {for(s in samples) print s,n[s]+0,total[s]+0,longest[s]+0}' "$WORK/samples.txt" "$WORK/roh_filtered.tsv" > "$WORK/roh_summary.tsv"
-
-    # Join H_obs, VCFtools F and ROH summaries by sample ID.
-    awk -v sp="$SPECIES" 'BEGIN {OFS="\t"} FILENAME==ARGV[1] {if(FNR==1) next; s=$1; order[++k]=s; called[s]=$2; het[s]=$3; h[s]=$4; skipped[s]=$5; next} FILENAME==ARGV[2] {if(FNR==1) next; f[$1]=$6; nf[$1]=$5; next} FILENAME==ARGV[3] {if(FNR==1) next; nr[$1]=$2; total[$1]=$3; longest[$1]=$4; next} END {for(i=1;i<=k;i++) {s=order[i]; print sp,s,called[s],het[s],h[s],skipped[s],(s in f ? f[s] : "NA"),(s in nf ? nf[s] : "NA"),(s in nr ? nr[s] : "NA"),(s in total ? total[s] : "NA"),(s in longest ? longest[s] : "NA")}}' "$WORK/observed_heterozygosity.tsv" "$WORK/inbreeding.het" "$WORK/roh_summary.tsv" >> "$OUTDIR/individual_summary.tsv"
+    # Standard .het columns: INDV O(HOM) E(HOM) N_SITES F.
+    # Read F and N_SITES by HEADER NAME to avoid positional-column mistakes.
+    awk -v sp="$SPECIES" 'BEGIN {OFS="\t"} FILENAME==ARGV[1] {if(FNR==1) next; s=$1; order[++k]=s; called[s]=$2; het[s]=$3; h[s]=$4; skipped[s]=$5; next} FILENAME==ARGV[2] {if(FNR==1) {for(j=1;j<=NF;j++) {if($j=="F") fi=j; if($j=="N_SITES") ni=j} if(!fi || !ni) {print "Unrecognized .het header" > "/dev/stderr"; bad=1; exit 1} next} f[$1]=$(fi); nf[$1]=$(ni)} END {if(!bad) for(i=1;i<=k;i++) {s=order[i]; print sp,s,called[s],het[s],h[s],skipped[s],(s in f ? f[s] : "NA"),(s in nf ? nf[s] : "NA")}}' "$WORK/observed_heterozygosity.tsv" "$WORK/inbreeding.het" >> "$OUTDIR/individual_HET_summary.tsv"
 done
 
-echo "Completed: $OUTDIR/individual_summary.tsv"
+echo "Completed: $OUTDIR/individual_HET_summary.tsv"
 
-# Interpretation and limitations:
-# 1. H_obs_retained_SNPs is SNP-panel heterozygosity, not per-base genome-wide H.
-# 2. F_VCFtools is a heterozygote deficit/excess statistic relative to this
-#    species sample. Population structure, relatives, small sample sizes,
-#    missingness and SNP ascertainment can affect it. Negative F is possible.
-# 3. For population-relative F, rerun on population-specific subsets, provided
-#    enough unrelated samples are available to estimate allele frequencies.
-# 4. ROH thresholds, GT error assumptions and recombination rate need sensitivity
-#    checks. Sparse markers / large gaps can produce misleading physical spans.
-#    Plot ROH against marker density; mask or split poorly covered stretches.
-# 5. Total_ROH_bp is the sum of filtered bcftools region spans, not F_ROH.
-#    F_ROH = Total_ROH_bp / appropriately assessed diploid genomic length,
-#    but numerator and denominator must refer to the same assessable regions.
-#    Do not use SNP count or blindly divide by total assembly length.
-# 6. All samples in a species should have comparable coverage / calling quality.
-#    Between-species differences in SNP density affect ROH detection power.
-# 7. Module availability, job runtime and memory depend on your installation
-#    and VCF size; adjust the SLURM resources as needed.
+# H_obs is heterozygous calls / fully called retained diploid SNPs, NOT per-base H.
+# F measures heterozygote deficit/excess relative to this species sample; it is
+# not proof of pedigree inbreeding. Population structure, admixture, relatedness,
+# small samples, ascertainment and genotype quality can affect it. Negative F
+# is possible. Use population-specific frequencies when appropriate and feasible.
+# Compare missingness and consistent genotype filters across species.
+# This script has no recombination-map dependency.
 
 
+#####
+# Now, we calculate ROH, regions of homozygosity
 
+sbatch 15.4_Calculate_Roh.sh /scratch/project_2009316/EuSamples/06.VCF/filt/your_filtered_file.vcf.gz
+all_samples_DP8.AN10.376Inds_noCAXY.364inds.vcf.gz
 
+15.4_Calculate_Roh.sh
+########################################################################################################################
+#!/bin/bash
+#SBATCH --job-name=IndividualROH
+#SBATCH --account=project_2009316
+#SBATCH --output=/scratch/project_2009316/EuSamples/06.VCF/logs/IndividualROH_%j.out
+#SBATCH --error=/scratch/project_2009316/EuSamples/06.VCF/logs/IndividualROH_%j.err
+#SBATCH --partition=small
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --time=12:00:00
+#SBATCH --mem=8G
+
+set -euo pipefail
+module load bio-apps
+module load bcftools
+
+# Save as 15.4_Calculate_Roh.sh
+# Submit: sbatch 15.4_Calculate_Roh.sh /absolute/path/to/filtered.vcf.gz
+
+# Standalone: no dependence on HET results.
+# Use autosomal diploid samples/regions only; exclude haploid males and mtDNA.
+VCF="${1:?Usage: sbatch 02_individual_ROH.sh /absolute/path/to/filtered.vcf.gz}"
+BASE=/scratch/project_2009316/EuSamples/06.VCF/filt
+SAMPLE_DIR="$BASE"
+OUTDIR="$BASE/PopGenMetrics/IndividualROH"
+RECMAP=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.recmap
+MAPDIR="$OUTDIR/recombination_maps"
+mkdir -p "$OUTDIR" "$MAPDIR"
+[[ -r "$VCF" && -r "$RECMAP" ]] || { echo "Cannot read VCF or map" >&2; exit 1; }
+
+GT_ERROR_PHRED=30
+MIN_CALL_FRACTION=0.80
+MIN_ROH_BP=100000
+MIN_ROH_MARKERS=50
+MIN_ROH_QUALITY=20
+# Above are exploratory settings, not species-validated thresholds.
+
+# Validate numeric fields FIRST, before sorting. Keep original line numbers.
+# Accept position 0 as a possible map boundary; it is not alone proof of error.
+# Input: chr pos cumulative_cM rate_cM_per_Mb. Never infer missing values as zero.
+awk -v log="$MAPDIR/map_invalid_rows.tsv" 'BEGIN {OFS="\t"; print "Original_line","Reason","Original_record" > log; num="^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"} NR==1 && $1=="chr" {next} NF==0 || /^#/ {next} {reason=""; if(NF!=4) reason="Expected four columns"; else if($1 ~ /[^A-Za-z0-9_.-]/) reason="Unsupported chromosome label"; else if($2 !~ /^[0-9]+$/) reason="Position is not a nonnegative integer"; else if($3 !~ num || $3+0<0) reason="Invalid cumulative cM"; else if($4 !~ num || $4+0<0) reason="Invalid local rate"; if(reason!="") {print NR,reason,$0 >> log; bad=1} else print $1,$2,$3,$4,NR} END {if(bad) {print "Invalid map rows: see " log > "/dev/stderr"; exit 1}}' "$RECMAP" > "$MAPDIR/map_validated.tsv"
+[[ -s "$MAPDIR/map_validated.tsv" ]] || { echo "Map contains no data" >&2; exit 1; }
+LC_ALL=C sort -k1,1 -k2,2n "$MAPDIR/map_validated.tsv" > "$MAPDIR/map_sorted.tsv"
+
+# Report offending original rows, not only a generic chromosome:position error.
+# Repeated physical positions require inspection, even if the values agree.
+awk -v log="$MAPDIR/map_order_issues.tsv" -v summary="$MAPDIR/map_summary.tsv" 'BEGIN {OFS="\t"; print "CHROM","Position","Original_line","Previous_position","Previous_cM","Current_cM","Issue" > log; print "CHROM","N_points","First_pos","Last_pos","First_cM","Last_cM","Delta_cM" > summary} {c=$1; if(c in n) {if($2<=pos[c]) {print c,$2,$5,pos[c],cm[c],$3,"Duplicate physical position" >> log; bad=1} if($3+0<cm[c]+0) {print c,$2,$5,pos[c],cm[c],$3,"Decreasing cumulative cM" >> log; bad=1}} else {fp[c]=$2; fc[c]=$3} n[c]++; pos[c]=$2; cm[c]=$3} END {for(c in n) {print c,n[c],fp[c],pos[c],fc[c],cm[c],cm[c]-fc[c] >> summary; if(n[c]<2 || cm[c]+0<=fc[c]+0) {print c,pos[c],"NA",fp[c],fc[c],cm[c],"No overall cumulative cM increase" >> log; bad=1}} if(bad) {print "Map validation failed. Inspect " log " and " summary > "/dev/stderr"; exit 1}}' "$MAPDIR/map_sorted.tsv"
+
+# BCFtools expects one map per chromosome, with cumulative cM in column THREE.
+# Plateaus are allowed; the supplied cumulative map is not reconstructed.
+awk -v dir="$MAPDIR" 'BEGIN {OFS="\t"} {c=$1; f=dir "/" c ".map"; if(!(c in seen)) {print "Position(bp)","Rate(cM/Mb)","Map(cM)" > f; close(f); seen[c]=1} print $2,$4,$3 >> f; close(f)}' "$MAPDIR/map_sorted.tsv"
+
+shopt -s nullglob
+# Ensure this pattern matches only intended species lists.
+LISTS=("$SAMPLE_DIR"/samples_*.txt)
+((${#LISTS[@]} > 0)) || { echo "No species sample lists found" >&2; exit 1; }
+printf 'Species\tSample\tN_ROH\tTotal_ROH_bp\tLongest_ROH_bp\tN_species_ROH_markers\n' > "$OUTDIR/individual_ROH_summary.tsv"
+
+for LIST in "${LISTS[@]}"; do
+    SPECIES=$(basename "$LIST" .txt)
+    SPECIES=${SPECIES#samples_}
+    WORK="$OUTDIR/$SPECIES"
+    mkdir -p "$WORK"
+    awk 'NF {gsub(/\r/, ""); print $1}' "$LIST" > "$WORK/samples.txt"
+    N=$(wc -l < "$WORK/samples.txt")
+    ((N >= 2)) || { echo "Skipping $SPECIES: insufficient samples for frequency estimation" >&2; continue; }
+    [[ $(sort -u "$WORK/samples.txt" | wc -l) -eq "$N" ]] || { echo "Duplicate sample IDs for $SPECIES" >&2; exit 1; }
+    echo "Processing $SPECIES: $N samples"
+
+    # Recalculate frequencies WITHIN the species, not across all species.
+    bcftools view -S "$WORK/samples.txt" -m2 -M2 -v snps -Ou "$VCF" | bcftools +fill-tags -Oz -o "$WORK/species_sites.vcf.gz" -- -t AF,AN
+    bcftools index -f "$WORK/species_sites.vcf.gz"
+    bcftools view -i "INFO/AF>0 && INFO/AF<1 && INFO/AN>=2*$N*$MIN_CALL_FRACTION" -Oz -o "$WORK/roh_markers.vcf.gz" "$WORK/species_sites.vcf.gz"
+    bcftools index -f "$WORK/roh_markers.vcf.gz"
+    N_MARKERS=$(bcftools index -n "$WORK/roh_markers.vcf.gz")
+    echo "$SPECIES: $N_MARKERS polymorphic ROH markers"
+
+    if ((N_MARKERS > 0)); then
+        # Confirm current map has each chromosome; avoid stale .map files.
+        bcftools index -s "$WORK/roh_markers.vcf.gz" | awk '$3>0 {print $1}' > "$WORK/roh_chromosomes.txt"
+        while IFS= read -r CHR; do
+            awk -v c="$CHR" 'NR>1 && $1==c {found=1} END {exit !found}' "$MAPDIR/map_summary.tsv" || { echo "Missing current map for $CHR" >&2; exit 1; }
+        done < "$WORK/roh_chromosomes.txt"
+
+        # Warn about markers beyond map endpoints. Review coverage before final
+        # interpretation; do not extend maps without justified assumptions.
+        bcftools query -f '%CHROM\t%POS\n' "$WORK/roh_markers.vcf.gz" | awk 'FILENAME==ARGV[1] {if(FNR>1) {lo[$1]=$3; hi[$1]=$4} next} {if($2<lo[$1] || $2>hi[$1]) outside[$1]++} END {for(c in outside) print "WARNING: " c ": " outside[c] " markers outside map endpoints" > "/dev/stderr"}' "$MAPDIR/map_summary.tsv" -
+        bcftools roh --AF-tag AF -G "$GT_ERROR_PHRED" --genetic-map "$MAPDIR/{CHROM}.map" -O r -o "$WORK/roh_raw.txt" "$WORK/roh_markers.vcf.gz"
+    else
+        echo "WARNING: no informative markers for $SPECIES; ROH results will be NA" >&2
+        : > "$WORK/roh_raw.txt"
+    fi
+
+    # Region output: RG sample CHROM start end length markers quality.
+    awk -v bp="$MIN_ROH_BP" -v markers="$MIN_ROH_MARKERS" -v q="$MIN_ROH_QUALITY" 'BEGIN {OFS="\t"; print "Record","Sample","CHROM","Start","End","Length_bp","N_markers","Quality"} $1=="RG" && $6>=bp && $7>=markers && $8>=q {print $1,$2,$3,$4,$5,$6,$7,$8}' "$WORK/roh_raw.txt" > "$WORK/roh_filtered.tsv"
+    awk -v m="$N_MARKERS" 'BEGIN {OFS="\t"; print "Sample","N_ROH","Total_ROH_bp","Longest_ROH_bp","N_species_ROH_markers"} FILENAME==ARGV[1] {samples[$1]=1; next} FILENAME==ARGV[2] && FNR>1 {s=$2; n[s]++; total[s]+=$6; if($6>longest[s]) longest[s]=$6} END {for(s in samples) if(m>0) print s,n[s]+0,total[s]+0,longest[s]+0,m; else print s,"NA","NA","NA",m}' "$WORK/samples.txt" "$WORK/roh_filtered.tsv" > "$WORK/roh_summary.tsv"
+    awk -v sp="$SPECIES" 'BEGIN {OFS="\t"} NR>1 {print sp,$0}' "$WORK/roh_summary.tsv" >> "$OUTDIR/individual_ROH_summary.tsv"
+done
+
+echo "Completed: $OUTDIR/individual_ROH_summary.tsv"
+
+# IMPORTANT:
+# Map diagnostics stop only this ROH job, not the independent HET job.
+# Inspect original map records; do not silently delete duplicates or integrate
+# local rates without knowing their provenance and interval interpretation.
+# The Admi1 hybrid map is an approximation for other species, even on the same
+# reference assembly. Frequency estimates in admixed/structured groups also
+# warrant caution. Use appropriate frequency panels when feasible.
+# Sparse markers and large coverage gaps can inflate inferred physical spans;
+# inspect density and apply appropriate genomic masks/gap handling before final
+# inference. Test sensitivity to ROH thresholds and GT-error assumptions.
+# Zero ROH is no detected/retained ROH, not proof of absence of inbreeding.
+# Total_ROH_bp is NOT F_ROH. F_ROH needs an appropriately assessed diploid-genome
+# denominator, with both ROH spans and denominator referring to the same regions.
 
 
 
