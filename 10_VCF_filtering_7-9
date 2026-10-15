@@ -242,7 +242,7 @@ module load biokit
 
 VCFIN=all_samples.SNPQ30.biall.fixedHeader.indDP.minDP8.hwe.376inds.AN10percMiss.vcf.gz
 
-## The code below now keeps all chromosomes and removes all the small CAXY regions, and then indexes the VCF file
+## The code below now keeps all chromosomes and removes all the small CAXY regions as well as mtDNA, and then indexes the VCF file
 vcftools --gzvcf "$VCFIN" --chr chromosome_1 --chr chromosome_2 --chr chromosome_3 --chr chromosome_4 --chr chromosome_5 --chr chromosome_6 --chr chromosome_7 --chr chromosome_8 --chr chromosome_9 --chr chromosome_10 --chr chromosome_11 --chr chromosome_12 --chr chromosome_13 --chr chromosome_14 --chr chromosome_15 --chr chromosome_16 --chr chromosome_17 --chr chromosome_18 --chr chromosome_19 --chr chromosome_20 --chr chromosome_21 --chr chromosome_22 --chr chromosome_24 --chr chromosome_25 --chr chromosome_26 --chr chromosome_27 --recode --recode-INFO-all --stdout | bgzip > all_samples_DP8.AN10.376Inds_noCAXY.vcf.gz      
 bcftools index -t all_samples_DP8.AN10.376Inds_noCAXY.vcf.gz
 
