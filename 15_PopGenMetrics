@@ -832,7 +832,13 @@ vcftools --gzvcf ${VCF} \
 # END
 #######
 
+#########################
+Now, we download the data to the local machine using scp and use the R script to analyse the data and make the plots.
+TO BE ADDED
 
+
+
+----------------------------------------------------------------------------------------------------------
 # Now, we calculate observed heterozygosity for each species
 # We will use th recombination map for this
 
