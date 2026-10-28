@@ -237,255 +237,9 @@ printf 'COMPLETE: %s\nSpecies VCF and QC reports: %s\n' "$SPECIES" "$DEST"
 # AFTER ALL TASKS SUCCEED, combine sample QC tables with this single-line command:
 # awk 'FNR==1 && NR!=1 {next} {print}' /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/{Admi1,aquiScand,lugu,poly,prat,aquiCentral,aqui,para,polyXrufa,rufa}/*.sample_QC.tsv > /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/all_groups.sample_QC.tsv
 
-# After that 
+##############################################
+# After obtaining the samples, we run the followign pyhton script to summarise the quality controls done in the previous scripts
 
-##########################################
-PYTHON SCRIPT TO CHECK DATA
-#!/usr/bin/env python3
-"""Flag samples for investigation from the species/group sample_QC.tsv reports.
-
-Requires Python 3 standard library only. Does not change a VCF or remove samples.
-Example:
-python3 flag_sample_qc.py --input all_groups.sample_QC.tsv --outdir qc_flags
-Multiple inputs:
-python3 flag_sample_qc.py --input species_QC/*/*.sample_QC.tsv --outdir qc_flags
-Use --help for configurable thresholds. All thresholds are exploratory defaults,
-not validated exclusion criteria. Assess BAM QC and biological context as well.
-"""
-import argparse
-import csv
-import math
-import statistics
-from collections import defaultdict
-from pathlib import Path
-
-
-def number(value):
-    try:
-        x = float(value)
-        return x if math.isfinite(x) else None
-    except (TypeError, ValueError):
-        return None
-
-
-def quantile(values, p):
-    values = sorted(values)
-    position = (len(values) - 1) * p
-    low = math.floor(position)
-    high = math.ceil(position)
-    return values[low] + (values[high] - values[low]) * (position - low)
-
-
-def write_table(path, fields, rows):
-    with path.open('w', newline='') as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, delimiter='\t', extrasaction='ignore')
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--input', nargs='+', required=True, help='One or more sample_QC.tsv files; shell wildcards are accepted.')
-    parser.add_argument('--outdir', required=True)
-    parser.add_argument('--missing-max', type=float, default=0.20, help='Flag missing_GT_fraction above this value (default 0.20).')
-    parser.add_argument('--mean-dp-min', type=float, default=10.0, help='Flag mean called-genotype DP below this value (default 10).')
-    parser.add_argument('--mean-gq-min', type=float, default=20.0, help='Flag mean called-genotype GQ below this value (default 20).')
-    parser.add_argument('--low-dp-fraction-max', type=float, default=0.20, help='Flag fraction_DP_lt10 above this value (default 0.20).')
-    parser.add_argument('--low-gq-fraction-max', type=float, default=0.20, help='Flag fraction_GQ_lt20 above this value (default 0.20).')
-    parser.add_argument('--tag-coverage-min', type=float, default=0.90, help='Flag DP/GQ available for less than this fraction of complete GT (default 0.90).')
-    parser.add_argument('--min-group-n', type=int, default=5, help='Minimum usable samples for within-group outlier checks (default 5).')
-    parser.add_argument('--outlier-z', type=float, default=3.5, help='Robust outlier cutoff using median and scaled MAD (default 3.5).')
-    parser.add_argument('--skip-het-groups', nargs='*', default=[], help='Group labels to omit from relative heterozygosity checks.')
-    args = parser.parse_args()
-    for name in ('missing_max', 'low_dp_fraction_max', 'low_gq_fraction_max', 'tag_coverage_min'):
-        if not 0 <= getattr(args, name) <= 1:
-            parser.error(f'--{name.replace("_", "-")} must be between 0 and 1.')
-    if args.min_group_n < 3 or args.outlier_z <= 0 or args.mean_dp_min < 0 or args.mean_gq_min < 0:
-        parser.error('Require min-group-n >= 3, outlier-z > 0, and nonnegative DP/GQ thresholds.')
-
-    required = ['sample_id', 'n_biallelic_snp_records', 'n_complete_GT',
-                'missing_GT_fraction', 'heterozygosity_called_diploid_SNPs',
-                'n_called_GT_with_DP', 'mean_DP_called_GT', 'fraction_DP_lt10',
-                'n_called_GT_with_GQ', 'mean_GQ_called_GT', 'fraction_GQ_lt20']
-    rows = []
-    seen = {}
-    numeric_fields = required[1:] + ['n_complete_diploid_GT']
-    for filename in args.input:
-        with Path(filename).open(newline='', encoding='utf-8-sig') as handle:
-            reader = csv.DictReader(handle, delimiter='\t')
-            fields = reader.fieldnames or []
-            group_column = 'group' if 'group' in fields else 'species' if 'species' in fields else None
-            missing = [column for column in required if column not in fields]
-            if missing or group_column is None:
-                parser.error(f'{filename}: missing required columns: {missing}; group/species column required.')
-            for line_number, raw in enumerate(reader, 2):
-                sample = (raw.get('sample_id') or '').strip()
-                group = (raw.get(group_column) or '').strip()
-                if not sample or not group:
-                    parser.error(f'{filename}:{line_number}: empty sample or group label.')
-                row = dict(raw)
-                row['group'] = group
-                row['sample_id'] = sample
-                key = (group, sample)
-                signature = tuple(row.get(field, '') for field in numeric_fields)
-                if key in seen:
-                    if seen[key] != signature:
-                        parser.error(f'Conflicting duplicate rows for group/sample {key}. Do not combine different QC runs.')
-                    continue
-                seen[key] = signature
-                row['_numbers'] = {field: number(row.get(field)) for field in numeric_fields}
-                row['_flags'] = []
-                row['_categories'] = set()
-                row['_missing'] = []
-                rows.append(row)
-    if not rows:
-        parser.error('No sample rows found.')
-
-    def flag(row, category, message):
-        row['_flags'].append(message)
-        row['_categories'].add(category)
-
-    def threshold(row, field, cutoff, direction, category, label):
-        value = row['_numbers'].get(field)
-        if value is None:
-            row['_missing'].append(field)
-        elif (direction == 'high' and value > cutoff) or (direction == 'low' and value < cutoff):
-            flag(row, category, f'{label}: {value:.4g} {">" if direction == "high" else "<"} {cutoff:.4g}')
-
-    for row in rows:
-        n = row['_numbers']['n_biallelic_snp_records']
-        called = row['_numbers']['n_complete_GT']
-        if n is None or n <= 0:
-            flag(row, 'data', 'No valid positive SNP-record denominator')
-        if called is None or called <= 0:
-            flag(row, 'data', 'No complete genotype calls or missing complete-call count')
-        threshold(row, 'missing_GT_fraction', args.missing_max, 'high', 'missingness', 'High missingness')
-        threshold(row, 'mean_DP_called_GT', args.mean_dp_min, 'low', 'depth', 'Low mean DP')
-        threshold(row, 'fraction_DP_lt10', args.low_dp_fraction_max, 'high', 'depth', 'Many DP<10 calls')
-        threshold(row, 'mean_GQ_called_GT', args.mean_gq_min, 'low', 'genotype_quality', 'Low mean GQ')
-        threshold(row, 'fraction_GQ_lt20', args.low_gq_fraction_max, 'high', 'genotype_quality', 'Many GQ<20 calls')
-        if called is not None and called > 0:
-            for tag in ('DP', 'GQ'):
-                count = row['_numbers'][f'n_called_GT_with_{tag}']
-                if count is None:
-                    row['_missing'].append(f'n_called_GT_with_{tag}')
-                elif count / called < args.tag_coverage_min:
-                    flag(row, 'tag_availability', f'{tag} available for only {count / called:.1%} of complete GT')
-                elif count > called:
-                    flag(row, 'data', f'{tag} count exceeds complete genotype count')
-        if row['_numbers']['heterozygosity_called_diploid_SNPs'] is None:
-            row['_missing'].append('heterozygosity_called_diploid_SNPs')
-
-    groups = defaultdict(list)
-    for row in rows:
-        groups[row['group']].append(row)
-    summaries = []
-    relative_checks = [
-        ('missing_GT_fraction', 'high', 'missingness'),
-        ('mean_DP_called_GT', 'both', 'depth'),
-        ('mean_GQ_called_GT', 'low', 'genotype_quality'),
-        ('heterozygosity_called_diploid_SNPs', 'both', 'heterozygosity'),
-    ]
-    for group, members in sorted(groups.items()):
-        for metric, direction, category in relative_checks:
-            valid = [(row, row['_numbers'][metric]) for row in members if row['_numbers'][metric] is not None]
-            values = [value for _, value in valid]
-            entry = dict(group=group, metric=metric, n_valid=len(values), median='NA', q25='NA', q75='NA',
-                         scaled_MAD='NA', scale_used='NA', lower_flag_bound='NA', upper_flag_bound='NA', status='')
-            if not values:
-                entry['status'] = 'unavailable'
-                summaries.append(entry)
-                continue
-            median = statistics.median(values)
-            q25, q75 = quantile(values, 0.25), quantile(values, 0.75)
-            mad = statistics.median([abs(value - median) for value in values])
-            scale = 1.4826 * mad
-            entry.update(median=median, q25=q25, q75=q75, scaled_MAD=scale)
-            if metric == 'heterozygosity_called_diploid_SNPs' and group in args.skip_het_groups:
-                entry['status'] = 'heterozygosity_check_disabled'
-            elif len(values) < args.min_group_n:
-                entry['status'] = 'too_few_samples_for_relative_check'
-            else:
-                entry['scale_used'] = 'scaled_MAD'
-                if scale == 0:
-                    scale = (q75 - q25) / 1.349
-                    entry['scale_used'] = 'IQR/1.349_fallback'
-                if scale <= 0:
-                    entry['status'] = 'zero_spread_relative_check_skipped'
-                else:
-                    lower = median - args.outlier_z * scale
-                    upper = median + args.outlier_z * scale
-                    entry.update(lower_flag_bound=lower if direction in ('low', 'both') else 'NA',
-                                 upper_flag_bound=upper if direction in ('high', 'both') else 'NA', status='checked')
-                    for row, value in valid:
-                        if direction in ('low', 'both') and value < lower:
-                            flag(row, category, f'Within-group low {metric}: {value:.4g} < {lower:.4g}')
-                        if direction in ('high', 'both') and value > upper:
-                            flag(row, category, f'Within-group high {metric}: {value:.4g} > {upper:.4g}')
-            summaries.append(entry)
-
-    output = Path(args.outdir)
-    output.mkdir(parents=True, exist_ok=True)
-    report = []
-    for row in sorted(rows, key=lambda r: (r['group'], r['sample_id'])):
-        categories = row['_categories']
-        # Count distinct technical dimensions, not correlated warnings twice.
-        technical = categories & {'missingness', 'depth', 'genotype_quality'}
-        status = 'MULTIPLE_TECHNICAL_WARNINGS' if len(technical) >= 2 else 'REVIEW' if categories else 'INCOMPLETE_QC' if row['_missing'] else 'NO_FLAGS'
-        result = {key: value for key, value in row.items() if not key.startswith('_')}
-        result.update(status=status, n_flag_categories=len(categories), n_technical_dimensions=len(technical),
-                      flag_categories=';'.join(sorted(categories)), flags=' | '.join(row['_flags']),
-                      unavailable_metrics=';'.join(sorted(set(row['_missing']))))
-        report.append(result)
-    lead = ['group', 'sample_id', 'status', 'n_flag_categories', 'n_technical_dimensions', 'flag_categories', 'flags', 'unavailable_metrics']
-    original_fields = sorted(set().union(*(set(r.keys()) for r in report)) - set(lead) - {'species'})
-    write_table(output / 'all_samples_qc_review.tsv', lead + original_fields, report)
-    write_table(output / 'samples_to_investigate.tsv', lead + original_fields, [r for r in report if r['status'] != 'NO_FLAGS'])
-    summary_fields = ['group', 'metric', 'n_valid', 'median', 'q25', 'q75', 'scaled_MAD', 'scale_used', 'lower_flag_bound', 'upper_flag_bound', 'status']
-    write_table(output / 'group_metric_summaries.tsv', summary_fields, summaries)
-
-    by_sample = defaultdict(list)
-    for row in report:
-        by_sample[row['sample_id']].append(row)
-    unique = []
-    for sample, entries in sorted(by_sample.items()):
-        reviewed = [entry for entry in entries if entry['status'] != 'NO_FLAGS']
-        unique.append(dict(sample_id=sample, groups=';'.join(sorted(e['group'] for e in entries)),
-                           n_groups=len(entries), review_groups=';'.join(sorted(e['group'] for e in reviewed)),
-                           review_any_group='YES' if reviewed else 'NO',
-                           flags_by_group=' | '.join(e['group'] + ': ' + (e['flags'] or 'Unavailable QC metrics') for e in reviewed)))
-    write_table(output / 'unique_sample_review.tsv', ['sample_id', 'groups', 'n_groups', 'review_groups', 'review_any_group', 'flags_by_group'], unique)
-
-    flagged = sum(r['status'] != 'NO_FLAGS' for r in report)
-    notes = [
-        f'Group/sample rows: {len(report)}; unique samples: {len(unique)}; rows requiring review: {flagged}.',
-        'Flags are exploratory INVESTIGATION prompts, not validated failures or exclusion decisions.',
-        'NO_FLAGS does not prove a sample is high quality. This script cannot detect all contamination, mapping, or sample identity issues.',
-        'Absolute thresholds are configurable starting points and may be inappropriate for low-coverage designs.',
-        'Relative outliers use within-group medians and 1.4826*MAD; IQR/1.349 is used only when MAD is zero.',
-        'Small groups or zero-spread distributions do not receive relative outlier checks.',
-        'Heterozygosity flags may be biological, especially in admixed, hybrid, or structured groups.',
-        'MULTIPLE_TECHNICAL_WARNINGS means at least two of missingness, depth, and GQ are flagged; correlated flags are not independent evidence.',
-        'Sample overlap between groups is retained explicitly, not counted as independent individuals.',
-        'DP/GQ describe complete genotype calls with available values at the QC SNP records, not genome-wide coverage.',
-        'Unfiltered calls can inflate heterozygosity or confidence summaries; reassess after justified genotype masking.',
-        'No VCFs were modified and no exclusion list was generated.',
-        'Outputs in the chosen directory are overwritten on rerun. Use a new directory to preserve earlier reports.',
-        '', 'Parameters:',
-    ]
-    notes.extend(f'{key}: {value}' for key, value in sorted(vars(args).items()))
-    (output / 'README_QC_report.txt').write_text('\n'.join(notes) + '\n')
-    print(notes[0])
-    print(f'Reports written to: {output.resolve()}')
-    print('Start with samples_to_investigate.tsv and group_metric_summaries.tsv.')
-
-
-if __name__ == '__main__':
-    main()
-###########################
-
-
-# After obtaining the samples, we run the followin pyhton script to summarise the quality controls done in the previous scripts
 # 1_flag_sample_qc.py
 #######
 !/usr/bin/env python3
@@ -752,10 +506,262 @@ if __name__ == '__main__':
 #You can also use different seetings
 #python3 flag_sample_qc.py --input "/scratch/project_2009316/EuSamples/06.VCF/species_QC/all_groups.sample_QC.tsv" --outdir "/scratch/project_2009316/EuSamples/06.VCF/species_QC/qc_flags_alternative" --missing-max 0.30 --skip-het-groups Admi1 polyXrufa
 #python3 flag_sample_qc.py --input "/scratch/project_2009316/EuSamples/06.VCF/species_QC/all_groups.sample_QC.tsv" --outdir "/scratch/project_2009316/EuSamples/06.VCF/species_QC/qc_flags_DP8" --mean-dp-min 8
+#python3 flag_sample_qc.py --input "/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/all_groups.sample_QC.tsv" --outdir "/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/qc_flags"
+
+###################################
+
+#Next, we use a script to mask GT and QC. Specifically, it keeps genotypes meeting both DP ≥ 8 and GQ ≥ 20 and sets genotypes tomissing with DP or GQ unabailable. After masking, it recalculates sample missingness before filtering sites, using the same SNP records as the original QC. This makes the before/after comparison meaningful.
+###############################################################################
+#!/bin/bash
+#SBATCH --job-name=maskGT_QC
+#SBATCH --account=project_2009316
+#SBATCH --output=maskGT_QC_%A_%a.out
+#SBATCH --error=maskGT_QC_%A_%a.err
+#SBATCH --time=48:00:00
+#SBATCH --partition=small
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=16000M
+#SBATCH --array=1-10%4
+
+# Save as mask_genotypes_qc.sh and submit with: sbatch mask_genotypes_qc.sh
+# Adjust account/partition/module/path settings for your cluster.
+# Requires bcftools with the +setGT plugin and Python 3.
+# Reads the ORIGINAL subset VCFs, not a previous masked VCF.
+# Does not remove any samples or records; no site-level filters are applied.
+# DP >= 8 AND GQ >= 20 are required; missing DP/GQ makes a GT unusable.
+# Existing missing GT are not imputed or recovered.
+# QC uses precisely the original script's definition of canonical biallelic SNPs.
+
+set -euo pipefail
+module load bio-apps/v202603
+# Add your cluster's bcftools module here if necessary.
+
+INDIR="/scratch/project_2009316/EuSamples/06.VCF/species_QC"
+OUTDIR="/scratch/project_2009316/EuSamples/06.VCF/species_masked_QC"
+MIN_DP=8
+MIN_GQ=20
+GROUPS_TO_PROCESS=(Admi1 aquiScand lugu poly prat aquiCentral aqui para polyXrufa rufa)
+
+command -v bcftools >/dev/null || { echo 'ERROR: bcftools not available.' >&2; exit 1; }
+command -v python3 >/dev/null || { echo 'ERROR: Python 3 not available.' >&2; exit 1; }
+TASK_ID="${SLURM_ARRAY_TASK_ID:?Submit as a SLURM array}"
+if (( TASK_ID < 1 || TASK_ID > ${#GROUPS_TO_PROCESS[@]} )); then
+    echo 'ERROR: Task number outside group range.' >&2
+    exit 1
+fi
+GROUP="${GROUPS_TO_PROCESS[$((TASK_ID - 1))]}"
+VCF="$INDIR/$GROUP/$GROUP.subset.vcf.gz"
+# Optional baseline QC generated by the original subsetting script.
+BASELINE="$INDIR/$GROUP/$GROUP.sample_QC.tsv"
+DEST="$OUTDIR/$GROUP"
+FINAL="$DEST/$GROUP.DP${MIN_DP}.GQ${MIN_GQ}.masked.vcf.gz"
+mkdir -p "$DEST"
+[[ -r "$VCF" ]] || { echo "ERROR: Cannot read $VCF" >&2; exit 1; }
+# Refuse to overwrite an existing result. Use another OUTDIR for a separate run.
+[[ ! -e "$FINAL" && ! -e "$FINAL.csi" ]] || { echo "ERROR: Output already exists: $FINAL. Use a new OUTDIR or deliberately remove previous outputs." >&2; exit 1; }
+WORK="$(mktemp -d "$DEST/.work.XXXXXX")"
+trap 'echo "Failure; diagnostic/work files retained in $WORK" >&2' ERR
+export VCF BASELINE WORK GROUP MIN_DP MIN_GQ
+
+bcftools --version > "$WORK/bcftools_version.txt"
+bcftools query -l "$VCF" > "$WORK/input_samples.txt"
+bcftools view -h "$VCF" > "$WORK/input_header.txt"
+
+python3 - <<'PY'
+import os
+import re
+from pathlib import Path
+w = Path(os.environ['WORK'])
+header = (w / 'input_header.txt').read_text()
+for tag in ('GT', 'DP', 'GQ'):
+    if not re.search(r'^##FORMAT=<ID=' + tag + r'[,>]', header, re.M):
+        raise SystemExit(f'ERROR: FORMAT/{tag} is absent from the header. This script stops rather than silently masking the entire dataset.')
+samples = (w / 'input_samples.txt').read_text().splitlines()
+if not samples or len(samples) != len(set(samples)):
+    raise SystemExit('ERROR: Empty or duplicated input sample IDs.')
+print(f"{os.environ['GROUP']}: {len(samples)} samples", flush=True)
+PY
+
+# IMPORTANT: single | operators combine criteria at the SAME SAMPLE level.
+# Do not substitute || here: that has site-level semantics in bcftools.
+# -t q selects GT using the expression; -n . sets selected GT to missing.
+# Missing values in DP/GQ are explicitly included.
+MASK_EXPR="FMT/DP=\".\" | FMT/GQ=\".\" | FMT/DP<${MIN_DP} | FMT/GQ<${MIN_GQ}"
+bcftools +setGT "$VCF" -Oz -o "$WORK/masked.vcf.gz" -- -t q -n . -i "$MASK_EXPR"
+bcftools index -f "$WORK/masked.vcf.gz"
+bcftools query -l "$WORK/masked.vcf.gz" > "$WORK/output_samples.txt"
+
+# Stream original and masked records together. This verifies that no records
+# were lost/reordered and that masking acted on each sample as intended.
+# Only per-sample counters are stored in memory, not the genotype matrix.
+python3 - <<'PY'
+import os
+import re
+import csv
+import math
+import subprocess
+from itertools import zip_longest
+from pathlib import Path
+
+w = Path(os.environ['WORK'])
+group = os.environ['GROUP']
+min_dp = float(os.environ['MIN_DP'])
+min_gq = float(os.environ['MIN_GQ'])
+samples = (w / 'input_samples.txt').read_text().splitlines()
+if samples != (w / 'output_samples.txt').read_text().splitlines():
+    raise SystemExit('ERROR: Sample IDs/order changed after masking.')
+counts = [dict(n=0, before_called=0, after_called=0, before_partial=0,
+               after_partial=0, newly_missing=0, absent_tag=0,
+               low_dp=0, low_gq=0) for _ in samples]
 
 
+def numeric(value):
+    try:
+        x = float(value)
+        return x if math.isfinite(x) else None
+    except ValueError:
+        return None
 
 
+def gt_state(gt):
+    alleles = re.split(r'[/|]', gt)
+    n_missing = sum(allele == '.' for allele in alleles)
+    return n_missing == 0, 0 < n_missing < len(alleles)
 
 
-python3 flag_sample_qc.py --input "/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/all_groups.sample_QC.tsv" --outdir "/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/qc_flags"
+before = subprocess.Popen(['bcftools', 'query', '-f', '%CHROM\t%POS\t%REF\t%ALT[\t%GT\t%DP\t%GQ]\n', os.environ['VCF']], stdout=subprocess.PIPE, text=True)
+after = subprocess.Popen(['bcftools', 'query', '-f', '%CHROM\t%POS\t%REF\t%ALT[\t%GT]\n', str(w / 'masked.vcf.gz')], stdout=subprocess.PIPE, text=True)
+n_records = 0
+try:
+    for original_line, masked_line in zip_longest(before.stdout, after.stdout):
+        if original_line is None or masked_line is None:
+            raise RuntimeError('Input/output record counts differ.')
+        original = original_line.rstrip('\n').split('\t')
+        masked = masked_line.rstrip('\n').split('\t')
+        if len(original) != 4 + 3 * len(samples) or len(masked) != 4 + len(samples):
+            raise RuntimeError('Unexpected query field count.')
+        if original[:4] != masked[:4]:
+            raise RuntimeError('Record identities/order changed during masking.')
+        n_records += 1
+        ref, alt = original[2], original[3]
+        # EXACTLY the same SNP definition as the original QC-generation script.
+        is_qc_snp = len(ref) == 1 and len(alt) == 1 and ref.upper() in 'ACGT' and alt.upper() in 'ACGT'
+        for i, c in enumerate(counts):
+            offset = 4 + 3 * i
+            old_gt = original[offset]
+            new_gt = masked[4 + i]
+            dp = numeric(original[offset + 1])
+            gq = numeric(original[offset + 2])
+            usable = dp is not None and gq is not None and dp >= min_dp and gq >= min_gq
+            old_complete, old_partial = gt_state(old_gt)
+            new_complete, new_partial = gt_state(new_gt)
+            # Validate masking for ALL record types, not only QC SNPs.
+            if usable:
+                if new_gt != old_gt:
+                    raise RuntimeError(f'Passing GT changed: {samples[i]} at {original[0]}:{original[1]}')
+            else:
+                new_alleles = re.split(r'[/|]', new_gt)
+                if any(allele != '.' for allele in new_alleles):
+                    raise RuntimeError(f'Failing GT was not fully masked: {samples[i]} at {original[0]}:{original[1]}')
+            if not is_qc_snp:
+                continue
+            c['n'] += 1
+            c['before_called'] += int(old_complete)
+            c['after_called'] += int(new_complete)
+            c['before_partial'] += int(old_partial)
+            c['after_partial'] += int(new_partial)
+            if old_complete:
+                c['newly_missing'] += int(not new_complete)
+                c['absent_tag'] += int(dp is None or gq is None)
+                c['low_dp'] += int(dp is not None and dp < min_dp)
+                c['low_gq'] += int(gq is not None and gq < min_gq)
+    rc_before, rc_after = before.wait(), after.wait()
+    if rc_before != 0 or rc_after != 0:
+        raise RuntimeError(f'bcftools query failed: original={rc_before}, masked={rc_after}')
+except Exception:
+    for proc in (before, after):
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait()
+    raise
+if counts[0]['n'] == 0:
+    raise SystemExit('ERROR: No canonical biallelic SNP records for QC.')
+
+# Confirm counts agree with original QC, when its table is available.
+# This checks the record denominator and complete-GT counts, not rounded fractions.
+baseline = Path(os.environ['BASELINE'])
+if baseline.is_file():
+    with baseline.open(newline='') as handle:
+        previous = {row['sample_id']: row for row in csv.DictReader(handle, delimiter='\t')}
+    if set(previous) != set(samples):
+        raise SystemExit('ERROR: Original QC sample IDs do not match the input VCF.')
+    for sample, c in zip(samples, counts):
+        old = previous[sample]
+        if int(old['n_biallelic_snp_records']) != c['n'] or int(old['n_complete_GT']) != c['before_called']:
+            raise SystemExit(f'ERROR: Original QC denominator/called count mismatch for {sample}. Check that VCF and QC table belong to the same run.')
+    baseline_status = 'Original QC denominator and complete-GT counts verified.'
+else:
+    baseline_status = 'Original QC table absent; before/after records matched directly, but previous QC table could not be verified.'
+
+
+def ratio(a, b):
+    return round(a / b, 6) if b else 'NA'
+
+
+columns = ['group', 'sample_id', 'n_biallelic_snp_records', 'n_complete_GT_before',
+           'n_complete_GT_after', 'n_missing_GT_before', 'n_missing_GT_after',
+           'missing_GT_fraction_before', 'missing_GT_fraction_after',
+           'increase_missingness_percentage_points', 'n_newly_missing_complete_GT',
+           'fraction_original_complete_GT_masked', 'n_partial_missing_GT_before',
+           'n_partial_missing_GT_after', 'n_original_complete_GT_missing_DP_or_GQ',
+           'n_original_complete_GT_DP_below_threshold', 'n_original_complete_GT_GQ_below_threshold',
+           'postmask_missingness_above_50pct']
+with (w / 'missingness_before_after.tsv').open('w', newline='') as handle:
+    writer = csv.writer(handle, delimiter='\t')
+    writer.writerow(columns)
+    for sample, c in zip(samples, counts):
+        n = c['n']
+        missing_before = n - c['before_called']
+        missing_after = n - c['after_called']
+        writer.writerow([group, sample, n, c['before_called'], c['after_called'],
+                         missing_before, missing_after, ratio(missing_before, n),
+                         ratio(missing_after, n), round(100 * (missing_after - missing_before) / n, 4),
+                         c['newly_missing'], ratio(c['newly_missing'], c['before_called']),
+                         c['before_partial'], c['after_partial'], c['absent_tag'],
+                         c['low_dp'], c['low_gq'], 'YES' if missing_after / n > 0.5 else 'NO'])
+notes = [
+    f'Group: {group}', f'Minimum DP: {min_dp:g}', f'Minimum GQ: {min_gq:g}',
+    f'Total VCF records checked: {n_records}', f'QC SNP records: {counts[0]["n"]}', baseline_status,
+    'No samples or records were removed. No site-level filtering was applied.',
+    'All input/output record identities and sample order were verified.',
+    'Masking was checked for every genotype across all record types.',
+    'QC denominator: original canonical biallelic SNP records, including sites monomorphic within a group.',
+    'Partial-missing GT count as missing; passing partial GT remain partial.',
+    'Thresholds apply to individual genotype DP/GQ, not mean sample DP/GQ.',
+    'Reason counts may overlap: one GT can have low DP and low GQ.',
+    'postmask_missingness_above_50pct is a descriptive warning, NOT an exclusion decision.',
+    'No allele counts/frequencies were refreshed. Existing INFO/AC, AN, AF and other cohort summaries may be stale after masking.',
+    'Recalculate INFO tags from retained GT before later allele-count/frequency filtering.',
+    'DP/GQ and other FORMAT fields are retained even for masked GT; downstream tools must honor missing GT.',
+]
+(w / 'masking_notes.txt').write_text('\n'.join(notes) + '\n')
+print('\n'.join(notes[:6]), flush=True)
+print(f'Samples above 50% postmask missingness: {sum((c["n"] - c["after_called"]) / c["n"] > 0.5 for c in counts)}', flush=True)
+PY
+
+PREFIX="$GROUP.DP${MIN_DP}.GQ${MIN_GQ}"
+cp "$WORK/missingness_before_after.tsv" "$DEST/$PREFIX.missingness_before_after.tsv"
+cp "$WORK/masking_notes.txt" "$DEST/$PREFIX.masking_notes.txt"
+cp "$WORK/output_samples.txt" "$DEST/$PREFIX.samples.txt"
+cp "$WORK/bcftools_version.txt" "$DEST/$PREFIX.bcftools_version.txt"
+mv "$WORK/masked.vcf.gz" "$FINAL"
+mv "$WORK/masked.vcf.gz.csi" "$FINAL.csi"
+rm -rf -- "$WORK"
+trap - ERR
+printf 'COMPLETE: %s\nMasked VCF: %s\nComparison: %s/%s.missingness_before_after.tsv\n' "$GROUP" "$FINAL" "$DEST" "$PREFIX"
+
+# After ALL array tasks succeed, combine the ten comparison tables:
+# awk 'FNR==1 && NR!=1 {next} {print}' /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/{Admi1,aquiScand,lugu,poly,prat,aquiCentral,aqui,para,polyXrufa,rufa}/*.missingness_before_after.tsv > /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/all_groups.missingness_before_after.tsv
+
