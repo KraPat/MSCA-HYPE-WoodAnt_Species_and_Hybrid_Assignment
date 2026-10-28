@@ -158,12 +158,12 @@ bcftools view -h DutchWoodAnts_20261027_raw.vcf.gz | less
 #########looks good
 
 ## The next checks take more time and shouldbe done in a batch job
-## "vim 9.0_sanityChecksVCF_roihu.sh"
+## "vim 888_sanityChecksVCF_Roihu.sh"
 #################################################################################################################################
 #!/bin/bash -l
 #SBATCH -J vcf_sanity
-#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/VCFsanit_%A_%a.out
-#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/VCFsanit_%A_%a.err
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/VCFsanit_%j.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/VCFsanit_%j.err
 #SBATCH --account=project_2009316
 #SBATCH --time=24:00:00
 #SBATCH -p small
@@ -171,143 +171,218 @@ bcftools view -h DutchWoodAnts_20261027_raw.vcf.gz | less
 #SBATCH --mem=32G
 #SBATCH --mail-type=START,FAIL,END
 
-module load bio-apps/v202603
-module load bcftools
+set -uo pipefail
 
-VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/DutchWoodAnts_20261027_raw.vcf.gz 
+VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/DutchWoodAnts_20261027_raw.vcf.gz
 REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
+OUTDIR=/scratch/project_2009316/EuSamples/06.VCF/sanity_checks/DutchWoodAnts_20261027_raw
 
-## 2. Check chromosome naming
-bcftools query -f '%CHROM\n' "$VCF" | sort | uniq > "${VCF%}.txt"
-## Look for chr1 vs 1 mixtures.
+mkdir -p "$OUTDIR" || exit 1
+# Fixed filenames: rerunning this script overwrites the previous reports.
+exec > "$OUTDIR/run_summary.txt" 2> "$OUTDIR/run_errors.txt"
 
+printf 'VCF: %s\nReference: %s\nOutput directory: %s\nStarted: %s\n' "$VCF" "$REF" "$OUTDIR" "$(date -Is)"
 
-# 3. Check for illegal/suspicious variants
-bcftools norm -c w -f "$REF" "$VCF" > /dev/null
-## This will warn (not modify) about: REF allele mismatches, invalid indels, malformed alleles
+module load bio-apps/v202603 || exit 1
+module load bcftools || exit 1
 
+[[ -r "$VCF" ]] || { echo "ERROR: Cannot read VCF: $VCF" >&2; exit 1; }
+[[ -r "$REF" ]] || { echo "ERROR: Cannot read reference: $REF" >&2; exit 1; }
 
-# 4. Check for obvious duplication / weirdness
-bcftools view -r <chrom_name> "$VCF" | wc -l
-## If one chromosome has an absurd number of lines, it might hint at:
-## A per-read or per-allele VCF rather than per-site or something like a bug in the FreeBayes run or input.
+printf 'check\texit_status\n' > "$OUTDIR/check_exit_status.tsv"
+FAILED=0
 
+# 1. Extract sample IDs and count them.
+# Stop if the header cannot be read: the column-count check needs this count.
+bcftools query -l "$VCF" > "$OUTDIR/sample_names.txt" 2> "$OUTDIR/sample_header_errors.txt"
+STATUS=$?
+printf 'sample_header\t%s\n' "$STATUS" >> "$OUTDIR/check_exit_status.tsv"
+if (( STATUS != 0 )); then
+    echo 'ERROR: Could not read sample names. See sample_header_errors.txt.' >&2
+    exit 1
+fi
+NSAMP=$(awk 'END { print NR + 0 }' "$OUTDIR/sample_names.txt")
+printf '%s\n' "$NSAMP" > "$OUTDIR/sample_count.txt"
+printf 'Number of samples: %s (expected for this dataset: 55)\n' "$NSAMP"
+if (( NSAMP != 55 )); then
+    echo 'WARNING: Sample count differs from the expected 55.'
+fi
 
-# 5. Check coordinate ordering
-bcftools sort -c "$VCF" > /dev/null
-## Note: without redirection this will try to write the entire (sorted) VCF to stdout, which is huge.
-## If you just want to check ordering, redirect to /dev/null as above.
-## If there is no output, then it is correclty sorted
-## If there are errors, it needs needs sorting
+# 2–4. Scan the decompressed text once, without requiring a VCF index.
+# This detects wrong column counts, counts records per chromosome, and
+# checks nondecreasing positions and contiguous chromosome blocks.
+# It does not check chromosome order against the header/reference.
+for REPORT in chromosome_names.txt chromosome_record_counts.tsv malformed_records.txt coordinate_order_errors.txt text_scan_summary.txt; do
+    : > "$OUTDIR/$REPORT"
+done
 
-
-# 6. Summary statistics
-bcftools stats "$VCF" > "${VCF%.vcf}.stats"
-## In the "all_samples_raw.stats" file, information on the number of SNPs, InDels, etc is stored.
-
-
-# 7. Check if there are multiple/more maformed records
-#Step 7.1 – Get the number of samples from the header
-NSAMP=$(bcftools query -l "$VCF" | wc -l)
-echo "$NSAMP"
-#NSAMP is expected to be 385
-
-#Step 7.22 – Scan for lines with wrong column counts
-NSAMP=$(bcftools query -l "$VCF" | wc -l)
-
-awk -v nsamp="$NSAMP" '
-BEGIN { FS = "\t" }
-!/^#/ {
-    expected = 9 + nsamp
-    if (NF != expected) {
-        # Print line number, CHROM, POS, and NF
-        print "LINE", NR, "CHROM", $1, "POS", $2, "NF", NF, "EXPECTED", expected
-    }
+# With pipefail, a decompression or AWK failure makes this check fail.
+gzip -cd -- "$VCF" 2> "$OUTDIR/decompression_errors.txt" | awk -v nsamp="$NSAMP" -v out="$OUTDIR" '
+BEGIN {
+    FS = "\t"
+    OFS = "\t"
+    expected = (nsamp > 0 ? 9 + nsamp : 8)
 }
-' "$VCF" > "${VCF%.vcf}.malformed_records.txt"
+!/^#/ {
+    records++
+    chrom = $1
+    pos = $2
+    counts[chrom]++
+
+    if (NF != expected) {
+        print "LINE", NR, "CHROM", chrom, "POS", pos, "NF", NF, "EXPECTED", expected > (out "/malformed_records.txt")
+        malformed++
+    }
+
+    if (NF < 2 || chrom == "" || pos !~ /^[0-9]+$/ || pos + 0 < 1) {
+        print "LINE", NR, "INVALID_CHROM_OR_POS", chrom, pos > (out "/coordinate_order_errors.txt")
+        order_errors++
+        next
+    }
+
+    if (!have_previous || chrom != previous_chrom) {
+        if (seen[chrom]) {
+            print "LINE", NR, "CHROM", chrom, "POS", pos, "CHROMOSOME_BLOCK_REPEATED" > (out "/coordinate_order_errors.txt")
+            order_errors++
+        }
+        seen[chrom] = 1
+    } else if (pos + 0 < previous_pos) {
+        print "LINE", NR, "CHROM", chrom, "POS", pos, "PREVIOUS_POS", previous_pos, "POSITION_DECREASED" > (out "/coordinate_order_errors.txt")
+        order_errors++
+    }
+    previous_chrom = chrom
+    previous_pos = pos + 0
+    have_previous = 1
+}
+END {
+    for (chrom in counts) {
+        print chrom > (out "/chromosome_names.txt")
+        print chrom, counts[chrom] > (out "/chromosome_record_counts.tsv")
+    }
+    print "total_records", records + 0 > (out "/text_scan_summary.txt")
+    print "wrong_column_count_records", malformed + 0 > (out "/text_scan_summary.txt")
+    print "coordinate_order_errors", order_errors + 0 > (out "/text_scan_summary.txt")
+}
+' 2> "$OUTDIR/text_scan_errors.txt"
+STATUS=$?
+printf 'text_scan\t%s\n' "$STATUS" >> "$OUTDIR/check_exit_status.tsv"
+if (( STATUS != 0 )); then
+    FAILED=1
+    echo 'ERROR: Text scan failed; its reports may be incomplete.'
+fi
+
+# Stable alphabetical ordering of the chromosome reports.
+sort -o "$OUTDIR/chromosome_names.txt" "$OUTDIR/chromosome_names.txt" || exit 1
+sort -k1,1 -o "$OUTDIR/chromosome_record_counts.tsv" "$OUTDIR/chromosome_record_counts.tsv" || exit 1
+
+# 5. Reference allele checks / normalization diagnostics.
+# -c w warns about REF mismatches. Normalized output is discarded:
+# the input VCF is not modified. This is not a comprehensive validator.
+bcftools norm -c w -f "$REF" -Ou "$VCF" > /dev/null 2> "$OUTDIR/reference_check_diagnostics.txt"
+STATUS=$?
+printf 'reference_check\t%s\n' "$STATUS" >> "$OUTDIR/check_exit_status.tsv"
+if (( STATUS != 0 )); then
+    FAILED=1
+    echo 'ERROR: Reference check failed. See reference_check_diagnostics.txt.'
+fi
+
+# 6. Summary statistics.
+bcftools stats "$VCF" > "$OUTDIR/vcf_statistics.txt" 2> "$OUTDIR/vcf_statistics_errors.txt"
+STATUS=$?
+printf 'vcf_statistics\t%s\n' "$STATUS" >> "$OUTDIR/check_exit_status.tsv"
+if (( STATUS != 0 )); then
+    FAILED=1
+    echo 'ERROR: Statistics command failed; its output may be incomplete.'
+fi
+
+printf '\nText-scan results (check text_scan exit status before interpreting):\n'
+cat "$OUTDIR/text_scan_summary.txt"
+printf '\nFinished: %s\n' "$(date -Is)"
+echo 'Empty malformed_records.txt means no wrong column counts were found, provided the scan completed successfully.'
+echo 'Empty coordinate_order_errors.txt means no coordinate/block errors were found, provided the scan completed successfully.'
+echo 'Reference diagnostics may contain normal bcftools summary messages as well as warnings.'
+echo 'Detected data issues are reported in the files; nonzero script exit means a check could not run successfully.'
+exit "$FAILED"
 
 #END
 #################################################################################################################################
 
+#Main output files
+#Filename	Contents
+#malformed_records.txt	Records with an incorrect number of columns
+#chromosome_names.txt	Unique chromosome names
+#chromosome_record_counts.tsv	Number of variant records per chromosome, excluding headers
+#coordinate_order_errors.txt	Decreasing positions or chromosomes appearing in separate blocks
+#reference_check_diagnostics.txt	REF-mismatch warnings and other bcftools norm diagnostics
+#vcf_statistics.txt	Output from bcftools stats
+#sample_names.txt	Sample IDs
+#sample_count.txt	Number of samples
+#check_exit_status.tsv	Whether each check completed successfully
+#run_summary.txt	Overall run summary
 
 ###CONTINUE HERE
 
-vim "9.2_sanityChecksBCF.sh.sh"
-#################################################################################################################################
 
+vim "888.1_SortnIndexVCF.sh"
+#################################################################################################################################
 #!/bin/bash -l
-#SBATCH -J BCF_sanity
-#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/BCFsanit_%A_%a.out
-#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/BCFsanit_%A_%a.err
+#SBATCH -J SortnIndexVCF
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/SortIndex_VCF_%j.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/SortIndex_VCF_%j.err
 #SBATCH --account=project_2009316
-#SBATCH -t 24:00:00
+#SBATCH --time=48:00:00
 #SBATCH -p small
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --mail-type=START,FAIL,END
 
-module load biokit
+set -euo pipefail
 
-#VCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.vcf
-#REF=/scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa
+module load bio-apps/v202603
+module load bcftools
 
-# Check for illegal/suspicious variants
-bcftools norm -c w -f /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa \
-    all_samples_raw.fixed.bcf > /dev/null
+INPUT=/scratch/project_2009316/EuSamples/06.VCF/raw/DutchWoodAnts_20261027_raw.vcf.gz
+OUTDIR=/scratch/project_2009316/EuSamples/06.VCF/raw
+PREFIX=DutchWoodAnts_20261027_raw.sorted
 
-# output was Lines   total/split/realigned/skipped:  52384499/0/4526134/
+mkdir -p "$OUTDIR"
 
-#Check stats
-bcftools stats all_samples_raw.fixed.bcf > all_samples_raw.fixed.bcf.stats
+OUTPUT="$OUTDIR/${PREFIX}.vcf.gz"
+COUNTS="$OUTDIR/${PREFIX}.chromosome_record_counts.tsv"
+THREADS=${SLURM_CPUS_PER_TASK:-4}
 
-## END
+# Separate run summary and error files.
+exec > "$OUTDIR/${PREFIX}.run_summary.txt" 2> "$OUTDIR/${PREFIX}.run_errors.txt"
 
-#############
-## Next, we first do some sanity checks on the BCF file.
-## We use the script below and run it on the cluster
+[[ -r "$INPUT" ]] || { echo "ERROR: Cannot read input: $INPUT" >&2; exit 1; }
+[[ "$INPUT" != "$OUTPUT" ]] || { echo 'ERROR: Input and output paths must differ.' >&2; exit 1; }
 
+# Unique temporary directory; removed on completion or failure.
+SORT_TMP=$(mktemp -d "$OUTDIR/tmp_sort_${SLURM_JOB_ID:-local}_XXXXXX")
+trap 'rm -rf -- "$SORT_TMP"' EXIT
 
-vim "9.3_SortnIndexBCF.sh"
-#################################################################################################################################
+printf 'Started: %s\nInput: %s\nOutput: %s\n' "$(date -Is)" "$INPUT" "$OUTPUT"
+echo 'WARNING: Existing output files with this prefix will be overwritten.'
 
-#!/bin/bash -l
-#SBATCH -J SortnIndexBCF
-#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/logs/SortIndex_BCF_%A_%a.out
-#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/logs/SortIndex_BCF_%A_%a.err
-#SBATCH --account=project_2009316
-#SBATCH -t 48:00:00
-#SBATCH -p small
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=64G
-#SBATCH --mail-type=START,FAIL,END
+# 1. Sort by chromosome and position and write a BGZF-compressed VCF.
+# -m limits the approximate sorting buffer, not total process memory.
+# Remove old indexes so they cannot be mistaken for indexes of the new file.
+rm -f -- "${OUTPUT}.csi" "${OUTPUT}.tbi"
+bcftools sort -m 8G -T "$SORT_TMP/sort" -Oz -o "$OUTPUT" "$INPUT" 2> "$OUTDIR/${PREFIX}.sorting.log"
+echo 'Sorting completed.'
 
-# Load bcftools (adjust to your cluster's module/env system)
-module load biokit
+# 2. Create a CSI index for the compressed VCF.
+# With set -e, this runs only if sorting succeeded.
+bcftools index --threads "$THREADS" --csi "$OUTPUT" 2> "$OUTDIR/${PREFIX}.indexing.log"
+echo 'Indexing completed.'
 
-#FIXED_BCF=/scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.bcf
+# 3. Get chromosome name, chromosome length, and record count from the index.
+# Counts are VCF records, not necessarily unique positions or SNPs.
+printf 'CHROM\tLENGTH\tN_RECORDS\n' > "$COUNTS"
+bcftools index --stats "$OUTPUT" >> "$COUNTS" 2> "$OUTDIR/${PREFIX}.chromosome_counts.log"
 
-cd /scratch/project_2009316/EuSamples/06.VCF/raw
-
-# Sort file
-mkdir -p /scratch/project_2009316/EuSamples/06.VCF/raw/tmp_bcftools
-
-bcftools sort \
-    -T /scratch/project_2009316/EuSamples/06.VCF/raw/tmp_bcftools \
-    -Ob -o /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.sorted.bcf \
-    /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.bcf
-
-
-#bcftools sort -Ob -o all_samples_raw.fixed.sorted.bcf all_samples_raw.fixed.bcf
-
-# Index file
-bcftools index /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.sorted.bcf
-
-# Count number of Variants per chromosome
-bcftools query -f '%CHROM\n' /scratch/project_2009316/EuSamples/06.VCF/raw/all_samples_raw.fixed.sorted.bcf \
-    | sort \
-    | uniq -c \
-    > /scratch/project_2009316/EuSamples/06.VCF/raw/site_count_per_chromosome.tab
-
-## END
+echo "Chromosome record counts saved to: $COUNTS"
+printf 'Finished successfully: %s\n' "$(date -Is)"
+#END
 
 
