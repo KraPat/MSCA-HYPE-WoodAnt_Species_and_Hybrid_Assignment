@@ -1,0 +1,242 @@
+#To calculate genome-wide dxy and Pi, we need a VCF including variant and invariant sites. Below, we will create such a VCF file for the Dutch wood ant samples.
+#We will follow a Ina's template:
+#https:/github.com/isatok/Wood_ant_local_genomic_patterns/blob/main/Pixy/1_allsites_vcf.sh
+
+#First, we will create new directories:
+mkdir /scratch/project_2009316/EuSamples/06.VCF
+mkdir /scratch/project_2009316/EuSamples/06.VCF/gvcf/
+mkdir /scratch/project_2009316/EuSamples/06.VCF/gvcf/raw/
+mkdir /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/
+
+cd /scratch/project_2009316/EuSamples/06.VCF/gvcf/
+
+#We already have a BAM list with the Dutch samples, titled "DutchBAMlist". It is stored under
+/scratch/project_2009316/EuSamples/05.BAM/BAM_final
+/scratch/project_2009316/EuSamples/05.BAM/BAM_final/DutchBAMlist
+
+#Before running the script, we need to create a list with the chromosomes
+cut -f1 /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa.fai | nl -ba
+#will get you a list of the chromosomes etc. Now, we will cut and only keep the chromosome using
+cut -f1 /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa.fai | awk '$1 ~ /^chromosome_[0-9]+$/ {n=$1; sub(/^chromosome_/, "", n); n+=0; if(n>=1 && n<=27 && n!=3 && n!=23) print $1}' > /scratch/project_2009316/EuSamples/06.VCF/gvcf/chromosomes_no03_no23.list
+
+#Before running the script, we also need to check DP threshholds and filter missing data
+#Max depth threshold: Calculate average of the mean depths and multiply by two -> follow the logic from the variant site vcf filtering where 
+#sites with >2x mean ind depth are set as missing.
+# IDEPTHPATH=/scratch/project_2009316/EuSamples/06.VCF/filt
+# cat $IDEPTHPATH/all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth
+# | grep -v "INDV" | awk '{ total += $3; count++ } END { print total/count }' #16.3052
+# 16.3052*2= ca. 32.61; set max avg depth to 33x.
+
+Below, we create the script to call the SNPs for variant and invariant sites
+vim 20.1_SNPcalling_AllSites.sh
+----------------------------------------------------------------------------------------------------
+#!/bin/bash -l
+#SBATCH -J allsites_vcf_mac2
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/allsites_vcf_mac2_%j_%a.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/allsites_vcf_mac2_%j_%a.err
+#SBATCH --account=project_2009316
+#SBATCH -t 70:00:00
+#SBATCH -p small
+#SBATCH --array=1-25
+#SBATCH --ntasks 1
+#SBATCH --mem=8G
+#SBATCH --mail-type=END
+
+#
+# 0. Load modules and set directory and variables -----------------------------
+#
+
+set -euo pipefail
+module load bio-apps/v202603
+module load bcftools
+module load vcftools
+
+# go to directory where raw gvcf for each chroms will be produced
+cd /scratch/project_2009316/EuSamples/06.VCF/gvcf/raw/
+
+# Get chroms ID
+REF=/scratch/project_2009316/rufaRefGenome
+chroms=$(sed -n "$SLURM_ARRAY_TASK_ID"p ${REF}/chromosomes_no03_no23.list)
+
+# write gvcf
+echo "Writing gvcf for ${chroms} ..."
+
+bcftools mpileup -f $REF/Frufa_PR_May2026.fa \
+  -b /scratch/project_2009316/EuSamples/05.BAM/BAM_final/BAMlist \
+  -r ${chroms} | bcftools call -m -Oz -f GQ -o /scratch/project_2009316/EuSamples/06.VCF/gvcf/raw/${chroms}_allsamples.vcf.gz
+
+# Set DP thresholds & filter missing data
+#Max depth threshold: Calculate average of the mean depths and multiply by two -> follow the logic from the variant site vcf filtering where 
+#sites with >2x mean ind depth are set as missing.
+# IDEPTHPATH=/scratch/project_2009316/EuSamples/06.VCF/filt
+# cat $IDEPTHPATH/all_samples.norm.dec.sor.nopha.SNPQ30.biall.fixedHeader.idepth
+# | grep -v "INDV" | awk '{ total += $3; count++ } END { print total/count }' #16.3052
+# 16.3052*2= ca. 32.61; set max avg depth to 33x.
+
+mindp=770 #2*385 samples
+maxdp=12705 #33*385 samples
+
+echo "Filtering VCF by depth ..."
+bcftools view -Ou "${chroms}_allsamples.vcf.gz" | \
+  bcftools filter -e "DP < ${mindp} | DP > ${maxdp}" --set-GTs . -Oz \
+  -o "${chroms}_allsamples_meanDP${mindp}-${maxdp}.vcf.gz"  
+
+bcftools index -t "${chroms}_allsamples_meanDP${mindp}-${maxdp}.vcf.gz"
+
+echo "Removing low coverage individuals ..."
+________________vcftools --gzvcf ${scaffold}_allsamples_meanDP${mindp}-${maxdp}.vcf.gz --remove-indv 110-FaquH  --remove-indv RN418 --remove-indv 105-FaquH --remove-indv 54-Frufa \
+--remove-indv s353 --remove-indv s354 --remove-indv RN421 --remove-indv RN425 --remove-indv RN426 --remove-indv RN422 \
+--recode --recode-INFO-all --stdout | bgzip > ${scaffold}_highcovsamples_meanDP${mindp}-${maxdp}.vcf.gz
+bcftools index -t ${scaffold}_highcovsamples_meanDP${mindp}-${maxdp}.vcf.gz
+
+echo "Filtering missing data per site ..."
+bcftools view -Ou "${chroms}_highCovSamples_meanDP${mindp}-${maxdp}.vcf.gz" | \
+  bcftools filter -e "F_MISSING > 0.5" -Oz \
+  -o "${chroms}_highCovSamples_meanDP${mindp}-${maxdp}_maxNA50perc.vcf.gz"  
+
+
+#---
+# Now, 2 VCFS will be made, one with only invariant sites and one with only variants\
+# these two are then combined to make a vcf will all sites (gvcf)
+# to combine they must both be indexed then combined with bcftools "concat"
+
+echo "Creating vcf for invariant sites ..."
+# Create a filtered VCF containing only invariant sites
+vcftools --gzvcf "${chroms}_highCovSamples_meanDP${mindp}-${maxdp}_maxNA50perc.vcf.gz" \
+  --max-maf 0 --recode --recode-INFO-all --stdout | \
+  bgzip -c > "${chroms}_highCovSamples_meanDP${mindp}-${maxdp}_maxNA50perc_invar.vcf.gz"  #
+
+echo "Creating VCF for variant sites ..."
+# Create a filtered VCF containing only variant sites, keep SNPqual >= 30 and filter out HW excess and singletons
+vcftools --gzvcf "${chroms}_highCovSamples_meanDP${mindp}-${maxdp}_maxNA50perc.vcf.gz" \
+  --mac 2 --hwe 0.001 --minQ 30 --recode --recode-INFO-all --stdout | \
+  bgzip -c > "${chroms}_highCovSamples_meanDP${mindp}-${maxdp}_maxNA50perc_var.vcf.gz"  # CHANGED: consistent filename
+
+
+# Index both vcfs using tabix
+tabix ${chroms}_highCovSamples_meanDP${mindp}-${maxdp}_maxNA50perc_invar.vcf.gz
+tabix ${chroms}_highCovSamples_meanDP${mindp}-${maxdp}_maxNA50perc_var.vcf.gz
+
+echo "Combining VCFs for ${chroms} ..."
+bcftools concat \
+  --allow-overlaps \
+  "${chroms}_highCovSamples_meanDP${mindp}-${maxdp}_maxNA50perc_invar.vcf.gz" \
+  "${chroms}_highCovSamples_meanDP${mindp}-${maxdp}_maxNA50perc_var.vcf.gz" \
+  -Oz -o "${chroms}_filtered.vcf.gz"  
+
+# Index for concat afterwards
+tabix ${chroms}_filtered.vcf.gz
+
+echo "Removing temp files ..."
+# Remove temp files
+rm ${chroms}_highCovSamples_meanDP${mindp}-${maxdp}_maxNA50perc*
+rm ${chroms}_highCovSamples_meanDP${mindp}-${maxdp}*
+rm ${chroms}_meanDP${mindp}-${maxdp}*
+
+# End bash script
+------------------------------
+
+# For each chromosome, you get initially 4 files:
+chromosome_1_highCovSamples_meanDP110-1815_maxNA50perc.vcf.gz
+chromosome_1_highCovSamples_meanDP110-1815.vcf.gz
+chromosome_1_highCovSamples_meanDP110-1815.vcf.gz.tbi
+chromosome_1_allsamples.vcf.gz
+#Then, 2 VCFs will be made based on them, one with variant and one with invariant sites
+#Then, these VCFs will be combined and the "temporary" files will be removed,
+#so that ou end up with 2 files (filtered VCF and indexed tbi files) per chromosome
+
+
+
+#Now, we create an interactive script to combine the per scaffold gvcf files ###
+3_CombineChroms.sh
+------------------------------------------------------------
+#!/bin/bash -l
+#SBATCH -J concat_filtered_vcfs
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/concat_filtered_vcfs_%j.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/concat_filtered_vcfs_%j.err
+#SBATCH --account=project_2009316
+#SBATCH -t 48:00:00
+#SBATCH -p small
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=8G
+
+set -euo pipefail
+
+module load bio-apps/v202603
+module load bcftools
+
+cd /scratch/project_2009316/EuSamples/06.VCF/gvcf/raw/
+
+CHROMS=/scratch/project_2009316/rufaRefGenome/chromosomes_no03_no23.list
+
+while IFS= read -r chrom; do
+    file="${chrom}_filtered.vcf.gz"
+    if [[ ! -s "$file" ]]; then
+        echo "Missing or empty input: $file" >&2
+        exit 1
+    fi
+    printf '%s\n' "$file"
+done < "$CHROMS" > filtered_vcfs.list
+
+bcftools concat --allow-overlaps --threads 3 -f filtered_vcfs.list -Oz -o ../filtered.vcf.gz
+bcftools index -t ../filtered.vcf.gz
+
+----------------------------
+
+
+### Now, we filter out duplicate sites from the all-sites vcf filtered.vcf.gz 
+vim 4_RemoveDuplicates.sh
+----------------------------------------------------------------------------------------------------
+#!/bin/bash -l
+#SBATCH -J remove_duplicates
+#SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/remove_duplicates.out
+#SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/remove_duplicates.err
+#SBATCH --account=project_2009316
+#SBATCH -t 24:00:00
+#SBATCH -p small
+#SBATCH --ntasks 1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=8G
+
+module load bio-apps/v202603
+module load bcftools
+
+cd /scratch/project_2009316/EuSamples/06.VCF/gvcf
+
+VCFIN=/scratch/project_2009316/EuSamples/06.VCF/gvcf/filtered.vcf.gz
+
+echo "Counting the initial number of records in filtered.vcf.gz ..."
+bcftools index -n $VCFIN
+
+#Filter out duplicate sites (achieve this by filtering out all that are mnp's and not homozygous "ref" or "snp" type)
+echo "counting the amount of duplicates in filtered.vcf.gz (divide this number by two)..."
+echo $VCFIN
+gunzip -c $VCFIN | cut -f2 | uniq -D | wc -l
+
+#Keep only sites hom for reference allele or snps
+bcftools filter --threads 8 -Oz -e 'TYPE!="ref" && TYPE!="snp"' -m+ $VCFIN > filtered_noindels.vcf.gz
+bcftools index -t filtered_noindels.vcf.gz
+
+echo "Counting how many sites remain after TYPEref and TYPEsnp filtering..."
+bcftools index -n filtered_noindels.vcf.gz
+
+echo "Counting how many duplicates are left (divide the number by two)..."
+gunzip -c filtered_noindels.vcf.gz | cut -f2 | uniq -D | wc -l
+
+echo "Checking duplicate positions on chromosome_1 - specifically checking examples of what kind of variants they are - mnps? look at these coordinates in the filtered_noindels.vcf.gz file..."
+gunzip -c filtered_noindels.vcf.gz | grep "chromosome_1" | cut -f2 | uniq -D | head     # e.g. xx, yy, zz
+#bcftools view -H -r chromosome1:5047119 filtered_noindels.vcf.gz #They are mnps
+
+#Always the first one is the snp and the second one mnp. Remove all second instances
+echo "Removing exact duplicate records - all second instances of duplicate sites (expecting the first ones to be the real snps)..."
+bcftools norm --rm-dup all --threads 8 -Oz filtered_noindels.vcf.gz > filtered_noindels_rmdup.vcf.gz
+bcftools index -t filtered_noindels_rmdup.vcf.gz
+
+echo "Counting records after duplicate filtering (add to this the initial #of duplicates - does it match with the input vcf site count?) ..."
+bcftools index -n filtered_noindels_rmdup.vcf.gz 
+
+echo "Counting how many duplicates remain (divide by two)..."
+gunzip -c filtered_noindels_rmdup.vcf.gz | cut -f2 | uniq -D | wc -l
+
+### END.
