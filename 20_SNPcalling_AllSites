@@ -191,10 +191,10 @@ chromosome_1_allsamples.vcf.gz
 
 
 #Now, we create an interactive script to combine the per scaffold gvcf files ###
-3_CombineChroms.sh
+vim 20.2_CombineChroms.sh
 ------------------------------------------------------------
 #!/bin/bash -l
-#SBATCH -J concat_filtered_vcfs
+#SBATCH -J EuSamp_concat_filtered_vcfs
 #SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/concat_filtered_vcfs_%j.out
 #SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/concat_filtered_vcfs_%j.err
 #SBATCH --account=project_2009316
@@ -229,10 +229,10 @@ bcftools index -t ../highCovSamples_filtered.vcf.gz
 
 
 ### Now, we filter out duplicate sites from the all-sites vcf filtered.vcf.gz 
-vim 4_RemoveDuplicates.sh
+vim 20.3_RemoveDuplicates.sh
 ----------------------------------------------------------------------------------------------------
 #!/bin/bash -l
-#SBATCH -J remove_duplicates
+#SBATCH -J EuSamp_remove_duplicates
 #SBATCH -o /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/remove_duplicates.out
 #SBATCH -e /scratch/project_2009316/EuSamples/06.VCF/gvcf/logs/remove_duplicates.err
 #SBATCH --account=project_2009316
