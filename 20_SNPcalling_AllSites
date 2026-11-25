@@ -27,6 +27,18 @@ cut -f1 /scratch/project_2009316/rufaRefGenome/Frufa_PR_May2026.fa.fai | awk '$1
 # | grep -v "INDV" | awk '{ total += $3; count++ } END { print total/count }' #16.3052
 # 16.3052*2= ca. 32.61; set max avg depth to 33x.
 
+#The following individuals have been excluded from previous SNP calling due to >50% missing of the data
+105_Adm1_FI_nodupl_wRG_clip2
+54_Adm1_FI_nodupl_wRG_clip2
+A_275b_spp_FI_nodupl_wRG_clip2
+Fpoly_SRR12432375_nodupl_wRG_clip2
+Fprat_SRR15845547_nodupl_wRG_clip2
+H_275B_spp_FI_nodupl_wRG_clip2
+RN418_spp_DE_nodupl_wRG_clip2
+s353_spp_DE_nodupl_wRG_clip2
+s354_spp_DE_nodupl_wRG_clip2
+
+
 Below, we create the script to call the SNPs for variant and invariant sites
 vim 20.1_SNPcalling_AllSites.sh
 ----------------------------------------------------------------------------------------------------
@@ -83,11 +95,16 @@ bcftools view -Ou "${chroms}_allsamples.vcf.gz" | \
 
 bcftools index -t "${chroms}_allsamples_meanDP${mindp}-${maxdp}.vcf.gz"
 
+
 echo "Removing low coverage individuals ..."
 ________________vcftools --gzvcf ${scaffold}_allsamples_meanDP${mindp}-${maxdp}.vcf.gz --remove-indv 110-FaquH  --remove-indv RN418 --remove-indv 105-FaquH --remove-indv 54-Frufa \
 --remove-indv s353 --remove-indv s354 --remove-indv RN421 --remove-indv RN425 --remove-indv RN426 --remove-indv RN422 \
 --recode --recode-INFO-all --stdout | bgzip > ${scaffold}_highcovsamples_meanDP${mindp}-${maxdp}.vcf.gz
 bcftools index -t ${scaffold}_highcovsamples_meanDP${mindp}-${maxdp}.vcf.gz
+
+
+
+
 
 echo "Filtering missing data per site ..."
 bcftools view -Ou "${chroms}_highCovSamples_meanDP${mindp}-${maxdp}.vcf.gz" | \
