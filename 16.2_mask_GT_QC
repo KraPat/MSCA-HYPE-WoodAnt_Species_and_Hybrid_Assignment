@@ -251,3 +251,31 @@ trap - ERR
 printf 'COMPLETE: %s\nMasked VCF: %s\nComparison: %s/%s.missingness_before_after.tsv\n' "$GROUP" "$FINAL" "$DEST" "$PREFIX"
 
 # After ALL array tasks succeed, combine the ten comparison tables:
+# awk 'FNR==1 && NR!=1 {next} {print}' /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/{Admi1,aquiScand,lugu,poly,prat,aquiCentral,aqui,para,polyXrufa,rufa}/*.missingness_before_after.tsv > /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/all_groups.missingness_before_after.tsv
+
+----------------
+#The script above created table "all_groups.missingness_before_after.tsv" compares multiple things
+#First, we do some premilinary checks. For every row, check:
+    n_biallelic_snp_records is the same across samples within a group.
+    n_complete_GT_after is no greater than n_complete_GT_before.
+    missing_GT_fraction_after is no lower than missing_GT_fraction_before.
+    increase_missingness_percentage_points is zero or positive.
+#The increase is reported in percentage points: for example, 0.10 means an increase of 0.10 percentage points, not 10%.
+#We can also check the original QC table, compare its missingness and complete-genotype counts with the before columns. The mask script also checks this comparison against the original table when available.
+#Many H_samples (n=77) have now higher missing genotypes than 50% than most other samples. Could be a batch effect.
+###Now, going back to the previous analyses and calculations: Overall, the BAM coverage looked good across the H_ samples with values being mostly over 20x depth. Also mapping rates were mostly high with values close to 97%. Per-sample missingness was mainly below 7 percent reported by VCFtools after site filtering. THe minimum depth was lower than 8 for many H_samples.
+
+#Second, we identify samples that need closer review
+#Sort or filter by:
+    postmask_missingness_above_50pct = YES — prioritize these for investigation. This is a warning flag, not an automatic exclusion rule.
+    missing_GT_fraction_after — compare values within each species/group. Look for samples substantially higher than their group, especially if they were already high before masking. This is the main measure for deciding which samples need attention.
+    fraction_original_complete_GT_masked — shows the share of previously complete genotypes made missing by DP/GQ masking, basically how much of the sample’s previously complete data failed DP/GQ thresholds.
+    increase_missingness_percentage_points — highlights how much masking changed missingness. A large increase may indicate low or missing DP/GQ across many calls.
+
+#Third, interpret the masking-reason counts carefully
+    n_original_complete_GT_missing_DP_or_GQ: originally complete calls missing DP or GQ.
+    n_original_complete_GT_DP_below_threshold: calls with available DP below 8.
+    n_original_complete_GT_GQ_below_threshold: calls with available GQ below 20.
+
+#Based on these thresholds, specifically the missing_GT_fraction_after, 77 samples, mainly from H_samples and some RN samples, should be excluded. This is with a threshold of 50% missing data. To keep most of the samples, we increased the missingness to 60% for now. With such a higher missingness value, only 28 samples need to be excluded, but 49 can be kept. In the next script, we will exclude these samples (with >60% missingness) from the species VCFs and filter them. 
+#
