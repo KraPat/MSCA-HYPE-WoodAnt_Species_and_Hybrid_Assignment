@@ -189,12 +189,129 @@ echo "Recalculated INFO tags: AN, AC, AF, NS"
 echo "Completed group ${GROUP}"
 
 #END
+----------------------------
+
+# To confirm the outputs exist and inspect their sample and record counts:
+for f in /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/excluded60_recalcAN/*/*.vcf.gz; do echo "$f"; bcftools query -l "$f" | wc -l; bcftools index -n "$f"; done
+
+#which outputs, so basically the number of samples within each VCF
+/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/excluded60_recalcAN/Admi1/Admi1.DP8.GQ20.excl60.recalcAN.vcf.gz
+[W::bcf_hdr_check_sanity] GQ should be declared as Type=Integer
+52
+17772603
+/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/excluded60_recalcAN/aqui/aqui.DP8.GQ20.excl60.recalcAN.vcf.gz
+[W::bcf_hdr_check_sanity] GQ should be declared as Type=Integer
+123
+17772603
+/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/excluded60_recalcAN/aquiCentral/aquiCentral.DP8.GQ20.excl60.recalcAN.vcf.gz
+[W::bcf_hdr_check_sanity] GQ should be declared as Type=Integer
+33
+17772603
+/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/excluded60_recalcAN/aquiScand/aquiScand.DP8.GQ20.excl60.recalcAN.vcf.gz
+[W::bcf_hdr_check_sanity] GQ should be declared as Type=Integer
+90
+17772603
+/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/excluded60_recalcAN/para/para.DP8.GQ20.excl60.recalcAN.vcf.gz
+[W::bcf_hdr_check_sanity] GQ should be declared as Type=Integer
+16
+17772603
+/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/excluded60_recalcAN/polyXrufa/polyXrufa.DP8.GQ20.excl60.recalcAN.vcf.gz
+[W::bcf_hdr_check_sanity] GQ should be declared as Type=Integer
+7
+17772603
+/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/excluded60_recalcAN/prat/prat.DP8.GQ20.excl60.recalcAN.vcf.gz
+[W::bcf_hdr_check_sanity] GQ should be declared as Type=Integer
+21
+17772603
+/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/excluded60_recalcAN/rufa/rufa.DP8.GQ20.excl60.recalcAN.vcf.gz
+[W::bcf_hdr_check_sanity] GQ should be declared as Type=Integer
+63
+17772603
+
+-------------------------------
+#Now, we need to apply site-missingness filter separately to each species, e.g.:
+#First, we create a log directory
+mkdir -p /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/slurm_logs
+
+--
+vim 4_Recalc_10PercSiteMissing.sh
+------
+#!/usr/bin/env bash
+#SBATCH --job-name=site10percMissing
+#SBATCH --account=project_2009316
+#SBATCH --array=0-7%4
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=12:00:00
+#SBATCH --partition=small
+#SBATCH --output=/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/slurm_logs/%x_%A_%a.out
+#SBATCH --error=/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/slurm_logs/%x_%A_%a.err
+
+# Reads the already sample-filtered, AN/AC/AF/NS-recalculated VCFs from
+# species_masked_QC/excluded60_recalcAN. Recalculates only F_MISSING,
+# retains sites with <=10% missing genotypes, and writes a new indexed VCF.
+# Does not repeat sample exclusion or recalculate AN/AC/AF/NS.
+
+set -euo pipefail
+module load bio-apps/v202603
+module load bcftools
 
 
+BASE="/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC"
+INPUT_ROOT="${BASE}/excluded60_recalcAN"
+OUTROOT="${BASE}/siteMiss10"
+VCF_GROUPS=(Admi1 aqui aquiCentral aquiScand para polyXrufa prat rufa)
 
+TASK_ID="${SLURM_ARRAY_TASK_ID:?Submit as a SLURM array job}"
+if (( TASK_ID < 0 || TASK_ID >= ${#VCF_GROUPS[@]} )); then
+  echo "ERROR: SLURM_ARRAY_TASK_ID=${TASK_ID} is outside 0-$(( ${#VCF_GROUPS[@]} - 1 ))." >&2
+  exit 1
+fi
 
+GROUP="${VCF_GROUPS[$TASK_ID]}"
+INPUT_VCF="${INPUT_ROOT}/${GROUP}/${GROUP}.DP8.GQ20.excl60.recalcAN.vcf.gz"
+OUTDIR="${OUTROOT}/${GROUP}"
+OUT_VCF="${OUTDIR}/${GROUP}.DP8.GQ20.excl60.siteMiss10.recalcAN.vcf.gz"
 
+mkdir -p "$OUTDIR"
 
+if ! command -v bcftools >/dev/null 2>&1; then
+  echo "ERROR: bcftools is not on PATH; load/activate the correct environment." >&2
+  exit 1
+fi
+if [[ ! -r "$INPUT_VCF" ]]; then
+  echo "ERROR: Input VCF not found/readable: $INPUT_VCF" >&2
+  exit 1
+fi
+if [[ -e "$OUT_VCF" ]]; then
+  echo "ERROR: Output already exists; move/remove it before rerunning: $OUT_VCF" >&2
+  exit 1
+fi
+
+N_IN="$(bcftools query -l "$INPUT_VCF" | wc -l | tr -d ' ')"
+echo "Group: ${GROUP}; input samples: ${N_IN}"
+echo "Input: ${INPUT_VCF}"
+
+# F_MISSING is recomputed from the current GT calls before filtering.
+# The existing AN/AC/AF/NS tags are retained from the previous recalculation step.
+bcftools +fill-tags "$INPUT_VCF" -Ou -- -t F_MISSING | bcftools view --threads "${SLURM_CPUS_PER_TASK:-4}" -i 'INFO/F_MISSING<=0.10' -Oz -o "$OUT_VCF"
+
+bcftools index -f "$OUT_VCF"
+N_OUT="$(bcftools query -l "$OUT_VCF" | wc -l | tr -d ' ')"
+if [[ "$N_OUT" -ne "$N_IN" ]]; then
+  echo "ERROR: Sample count changed unexpectedly: input=${N_IN}, output=${N_OUT}." >&2
+  exit 1
+fi
+if ! bcftools query -f '%INFO/F_MISSING\n' "$OUT_VCF" | awk '$1 > 0.100001 { bad=1 } END { exit bad }'; then
+  echo "ERROR: At least one output site exceeds 10% missingness." >&2
+  exit 1
+fi
+N_RECORDS="$(bcftools index -n "$OUT_VCF")"
+echo "Output: ${OUT_VCF}"
+echo "Samples retained: ${N_OUT}; sites passing <=10% missingness: ${N_RECORDS}"
+echo "Completed group ${GROUP}"
+
+#END
 
 
 
