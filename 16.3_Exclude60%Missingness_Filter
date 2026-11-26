@@ -355,7 +355,7 @@ for f in /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species
 # It writes one .imiss report per group under species_masked_QC/final_missingness/
 # This is useful for reporting, but don’t use the lower missingness after site filtering to revisit sample exclusions: removing high-missingness sites will naturally make the remaining genotypes look more complete.
 
-vim 5__final_missingness_report.sh
+vim 5_final_missingness_report.sh
 -------------
 #!/usr/bin/env bash
 #SBATCH --job-name=final_imiss
@@ -435,32 +435,34 @@ echo "Completed group ${GROUP}"
 #END
 ------------------------
 
-
-In each .imiss file, check that the report is complete and inspect F_MISS. It is each sample’s fraction of missing genotypes across the sites that remain in that group’s site-filtered VCF.
-
-The usual columns are:
-
+#In each .imiss file, check that the report is complete and inspect F_MISS.
+# It is each sample’s fraction of missing genotypes across the sites that remain in that group’s site-filtered VCF.
+# The usual columns are:
     INDV: sample ID.
     N_DATA: number of variant sites assessed for that sample.
     N_GENOTYPES_FILTERED: genotypes filtered during the VCFtools run; since your command applies no additional genotype filters, this will usually be zero.
     N_MISS: number of missing genotypes.
     F_MISS: fraction missing; this is the main column to review.
 
-What to check
-
+#What to check
     Every expected sample appears once in its group’s report. The row count should match the number of samples in that final VCF.
     N_DATA is consistent across samples within a group and corresponds to the number of retained sites.
     Sort by F_MISS to identify samples that are still outliers relative to others in the same group.
     Summarize the median and maximum F_MISS for each group.
 
-Don’t expect every sample’s F_MISS to be at or below 10%. The 10% filter was applied site by site across samples; it does not impose a 10% missingness limit on each individual sample. And because these reports use the already-filtered sites, their F_MISS values will be lower than the earlier pre-site-filter values. Use them to describe completeness of the final files, not to redo the sample-exclusion decision.
+#Don’t expect every sample’s F_MISS to be at or below 10%. The 10% filter was applied site by site across samples; it does not impose a 10% missingness
+# limit on each individual sample. And because these reports use the already-filtered sites, their F_MISS values will be lower 
+# than the earlier pre-site-filter values. Use them to describe completeness of the final files, not to redo the sample-exclusion decision.
+# First, we download the files. Then, we combine and summarize all reports in R like this:
 
-You can combine and summarize all reports in R like this:
+#Download files
+cd /root/EuSamples/06.VCF/GenomicOffset
+scp -r krapfpat@roihu-cpu.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/final_missingness/Admi1/*imiss ./
 
-r
-
+# in R
 library(dplyr)
 
+#CHANGE BELOW
 report_dir <- "/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/final_missingness"
 files <- list.files(report_dir, pattern = "\\.imiss$", recursive = TRUE, full.names = TRUE)
 
@@ -483,7 +485,7 @@ imiss %>%
   arrange(desc(F_MISS)) %>%
   select(group, INDV, N_DATA, N_MISS, F_MISS)
 
-Remember that aqui overlaps with aquiCentral and aquiScand, so those repeated samples appear in multiple group reports by design.
+#Remember that aqui overlaps with aquiCentral and aquiScand, so those repeated samples appear in multiple group reports by design.
 
 
 
