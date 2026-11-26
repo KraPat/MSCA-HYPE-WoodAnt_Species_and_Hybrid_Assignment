@@ -1,6 +1,9 @@
 # In this  script, we will exclude these samples (with >60% missingness) from the species VCFs and filter them. 
 #, re-calculates the INFO/AN, AC, AF, and NS from the remaining GT calls. It does not NOT filter sites.
 # Original masked VCFs are left unchanged.
+# Note, the script checks that every listed sample is present in its group VCF and stops if any ID is missing or misspelled.
+# Outputs will be under species_masked_QC/excluded60_recalcAN/<group>/.
+# INFO: HWE is not recalculated; if HWE fields is used for downstream analyses, it needs to be recalculate for the retained samples.
 
 vim 3_Exclude60PercMissing_RecalcAllCounts.sh
 ---------------------
