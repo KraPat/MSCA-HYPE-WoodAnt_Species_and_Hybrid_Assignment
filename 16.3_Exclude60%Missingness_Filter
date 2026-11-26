@@ -1,0 +1,207 @@
+# In this  script, we will exclude these samples (with >60% missingness) from the species VCFs and filter them. 
+#, re-calculates the INFO/AN, AC, AF, and NS from the remaining GT calls. It does not NOT filter sites.
+# Original masked VCFs are left unchanged.
+
+vim 3_Exclude60PercMissing_RecalcAllCounts.sh
+---------------------
+#!/usr/bin/env bash
+#SBATCH --job-name=exclude60_retag
+#SBATCH --account=project_2009316
+#SBATCH --array=0-7%4
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=24G
+#SBATCH --time=24:00:00
+#SBATCH --output=/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/slurm_logs/%x_%A_%a.out
+#SBATCH --error=/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/slurm_logs/%x_%A_%a.err
+#SBATCH --partition=small
+
+
+# Excludes the supplied >60%-missingness samples from each group VCF, then
+# recalculates INFO/AN, AC, AF, and NS from the remaining GT calls.
+# Does NOT filter sites. Original masked VCFs are left unchanged.
+
+set -euo pipefail
+
+module load bio-apps/v202603
+module load bcftools
+
+
+BASE="/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC"
+OUTROOT="${BASE}/excluded60_recalcAN"
+
+# Task order corresponds to SLURM_ARRAY_TASK_ID 0 through 7.
+VCF_GROUPS=(Admi1 aqui aquiCentral aquiScand para polyXrufa prat rufa)
+
+TASK_ID="${SLURM_ARRAY_TASK_ID:?Submit this script as a SLURM array job}"
+if (( TASK_ID < 0 || TASK_ID >= ${#VCF_GROUPS[@]} )); then
+  echo "ERROR: SLURM_ARRAY_TASK_ID=${TASK_ID} is outside 0-$(( ${#VCF_GROUPS[@]} - 1 ))." >&2
+  exit 1
+fi
+
+GROUP="${VCF_GROUPS[$TASK_ID]}"
+INPUT_VCF="${BASE}/${GROUP}/${GROUP}.DP8.GQ20.masked.vcf.gz"
+OUTDIR="${OUTROOT}/${GROUP}"
+OUT_VCF="${OUTDIR}/${GROUP}.DP8.GQ20.excl60.recalcAN.vcf.gz"
+
+mkdir -p "$OUTDIR"
+
+if ! command -v bcftools >/dev/null 2>&1; then
+  echo "ERROR: bcftools is not on PATH. Load/activate the correct environment in this script." >&2
+  exit 1
+fi
+if [[ ! -r "$INPUT_VCF" ]]; then
+  echo "ERROR: Input VCF not found/readable: $INPUT_VCF" >&2
+  exit 1
+fi
+if [[ -e "$OUT_VCF" ]]; then
+  echo "ERROR: Output already exists; move/remove it before rerunning: $OUT_VCF" >&2
+  exit 1
+fi
+
+TMPDIR_JOB="${SLURM_TMPDIR:-$OUTDIR}"
+mkdir -p "$TMPDIR_JOB"
+JOB_TAG="${SLURM_JOB_ID:-manual}_${TASK_ID}"
+EXCLUDE_FILE="${TMPDIR_JOB}/${GROUP}.exclude60.${JOB_TAG}.txt"
+SAMPLES_BEFORE="${TMPDIR_JOB}/${GROUP}.samples_before.${JOB_TAG}.txt"
+SUBSET_VCF="${OUTDIR}/.${GROUP}.subset.${JOB_TAG}.tmp.vcf.gz"
+cleanup() {
+  rm -f "$EXCLUDE_FILE" "$SAMPLES_BEFORE" "$SUBSET_VCF" "$SUBSET_VCF.csi" "$SUBSET_VCF.tbi"
+}
+trap cleanup EXIT
+
+  Admi1)
+    cat > "$EXCLUDE_FILE" <<'EOF'
+H_286A_spp_FI_nodupl_wRG_clip2
+RN425_spp_DE_nodupl_wRG_clip2
+H_449A_spp_SE_nodupl_wRG_clip2
+H_476A_spp_SE_nodupl_wRG_clip2
+H_451A_spp_SE_nodupl_wRG_clip2
+EOF
+    ;;
+  aqui|aquiCentral)
+    cat > "$EXCLUDE_FILE" <<'EOF'
+H_558C_spp_AT_nodupl_wRG_clip2
+H_607A_spp_IT_nodupl_wRG_clip2
+H_520A_spp_IT_nodupl_wRG_clip2
+H_600A_spp_IT_nodupl_wRG_clip2
+H_426A_spp_SE_nodupl_wRG_clip2
+H_604A_spp_IT_nodupl_wRG_clip2
+EOF
+    if [[ "$GROUP" == "aqui" ]]; then
+      cat >> "$EXCLUDE_FILE" <<'EOF'
+H_626A_spp_IT_nodupl_wRG_clip2
+H_272B_spp_FI_nodupl_wRG_clip2
+H_458A_spp_SE_nodupl_wRG_clip2
+H_623A_spp_IT_nodupl_wRG_clip2
+EOF
+    fi
+    ;;
+  aquiScand)
+    cat > "$EXCLUDE_FILE" <<'EOF'
+H_626A_spp_IT_nodupl_wRG_clip2
+H_272B_spp_FI_nodupl_wRG_clip2
+H_458A_spp_SE_nodupl_wRG_clip2
+H_623A_spp_IT_nodupl_wRG_clip2
+EOF
+    ;;
+  para)
+    cat > "$EXCLUDE_FILE" <<'EOF'
+H_591A_spp_IT_nodupl_wRG_clip2
+H_573A_spp_AT_nodupl_wRG_clip2
+EOF
+    ;;
+  polyXrufa)
+    cat > "$EXCLUDE_FILE" <<'EOF'
+H_617A_spp_IT_nodupl_wRG_clip2
+H_578A_spp_IT_nodupl_wRG_clip2
+H_595A_spp_IT_nodupl_wRG_clip2
+EOF
+    ;;
+  prat)
+    cat > "$EXCLUDE_FILE" <<'EOF'
+H_586A_spp_IT_nodupl_wRG_clip2
+H_547A_spp_DE_nodupl_wRG_clip2
+H_563A_spp_AT_nodupl_wRG_clip2
+EOF
+    ;;
+  rufa)
+    cat > "$EXCLUDE_FILE" <<'EOF'
+H_553A_spp_DE_nodupl_wRG_clip2
+RN421_spp_DE_nodupl_wRG_clip2
+H_536A_spp_DE_nodupl_wRG_clip2
+H_579A_spp_IT_nodupl_wRG_clip2
+H_561A_spp_AT_nodupl_wRG_clip2
+EOF
+    ;;
+  *)
+    echo "ERROR: No exclusion list defined for group $GROUP" >&2
+    exit 1
+    ;;
+esac
+
+bcftools query -l "$INPUT_VCF" > "$SAMPLES_BEFORE"
+N_BEFORE="$(wc -l < "$SAMPLES_BEFORE" | tr -d ' ')"
+N_EXCLUDE="$(wc -l < "$EXCLUDE_FILE" | tr -d ' ')"
+
+# Fail rather than silently proceeding if any requested sample ID is misspelled
+# or absent from the corresponding VCF.
+while IFS= read -r SAMPLE_ID; do
+  if ! grep -Fqx -- "$SAMPLE_ID" "$SAMPLES_BEFORE"; then
+    echo "ERROR: Requested exclusion sample is absent from ${GROUP} VCF: ${SAMPLE_ID}" >&2
+    exit 1
+  fi
+done < "$EXCLUDE_FILE"
+
+if (( N_EXCLUDE >= N_BEFORE )); then
+  echo "ERROR: Exclusion count (${N_EXCLUDE}) is not smaller than sample count (${N_BEFORE}) for ${GROUP}." >&2
+  exit 1
+fi
+
+N_EXPECTED=$((N_BEFORE - N_EXCLUDE))
+echo "Group: ${GROUP}"
+echo "Input: ${INPUT_VCF}"
+echo "Samples before: ${N_BEFORE}; excluding: ${N_EXCLUDE}; expected after: ${N_EXPECTED}"
+echo "Exclusion IDs:"
+cat "$EXCLUDE_FILE"
+
+# Remove samples into a temporary VCF, then recalculate genotype-derived INFO tags.
+bcftools view --threads "${SLURM_CPUS_PER_TASK:-4}" -S "^${EXCLUDE_FILE}" -Oz -o "$SUBSET_VCF" "$INPUT_VCF"
+bcftools +fill-tags "$SUBSET_VCF" --threads "${SLURM_CPUS_PER_TASK:-4}" -Oz -o "$OUT_VCF" -- -t AN,AC,AF,NS
+
+# Index and verify that the expected number of samples remain and excluded IDs are absent.
+bcftools index -f "$OUT_VCF"
+N_AFTER="$(bcftools query -l "$OUT_VCF" | wc -l | tr -d ' ')"
+if [[ "$N_AFTER" -ne "$N_EXPECTED" ]]; then
+  echo "ERROR: Expected ${N_EXPECTED} samples after exclusion, found ${N_AFTER}." >&2
+  exit 1
+fi
+if bcftools query -l "$OUT_VCF" | grep -Fxf "$EXCLUDE_FILE"; then
+  echo "ERROR: One or more excluded samples remain in ${OUT_VCF}." >&2
+  exit 1
+fi
+N_RECORDS="$(bcftools index -n "$OUT_VCF")"
+echo "Output: ${OUT_VCF}"
+echo "Samples after: ${N_AFTER}; records retained (no site filtering): ${N_RECORDS}"
+echo "Recalculated INFO tags: AN, AC, AF, NS"
+echo "Completed group ${GROUP}"
+
+#END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
