@@ -2,7 +2,7 @@
 # We thus created a new script to analyse lugubris
 # It follows the same logic and pipeline as 16.3
 
-vim 
+vim 16.4_lugubrisAnalysis.sh
 -------------------------------------------------
 !/usr/bin/env bash
 #SBATCH --job-name=lugu_qc
