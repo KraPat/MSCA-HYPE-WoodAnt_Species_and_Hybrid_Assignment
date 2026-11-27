@@ -1,12 +1,52 @@
 #### This script is to compute local Pi, Dxy and Fst estimates with PIXY ####
+# We first, need to install pixy using tykky
+# see also: https://docs.csc.fi/supercomputing/containers/tykky/index.html
+# remove all modules first and then load tykky
+module purge
 
+## 1)To create an environment we follow the following steps
+## Locally, on your Ubuntu machine, you have to create a new environment file and select which software you want to have installed. 
+
+conda create -n pixy
+conda activate pixy
+conda install mamba
+conda install -c conda-forge pixy
+conda install -c bioconda samtools
+#Note, this takes a while
+
+#Test the installation by running:
+pixy --help
+
+## 2) Now, we export this to en environment file "env.yml" which will be used on the cluster
+conda env export --from-history -n pixy | grep -v prefix > env.yml
+
+## 3) Copy .yml file to puhit in the projectappl folder
+scp /root/EuSamples/06.VCF/GenomicOffset/imiss_reports/final_missingness/env.yml krapfpat@roihu-cpu.csc.fi:/projappl/project_2009316/.
+
+## 4) Connect to PUTHI and move to projappl and create a folder for the container
+ssh puhti...
+cd /projappl/project_2009316
+mkdir /projappl/project_2009316/pixyEnv
+
+## 5) Now, we need to build a container from the yml recipe file: 
+module load tykky
+conda-containerize new --prefix /projappl/project_2009316/pixyEnv env.yml
+
+## 6) All the tools available in the container are accessible by adding the bin folder to the path: 
+export PATH="/projappl/project_2009316/pixyEnv/bin:$PATH"
+
+## DONE
+
+
+---
 #First, we need to create new folders to save the files
 mkdir /scratch/project_2009316/EuSamples/06.VCF/pixy
-mkdir /scratch/project_2009316/EuSamples/06.VCF/pixy/groupfiles
 mkdir /scratch/project_2009316/EuSamples/06.VCF/pixy/logs
+mkdir -p /scratch/project_2009316/EuSamples/06.VCF/pixy/pi_dxy_fst
+mkdir -p /scratch/project_2009316/EuSamples/06.VCF/pixy/pi_dxy_fst/combined_aqui
+mkdir -p /scratch/project_2009316/EuSamples/06.VCF/pixy/pi_dxy_fst/aqui_subpopulations
 
 cd /scratch/project_2009316/EuSamples/06.VCF/pixy
-
 
 ###
 ### 1. Prepare group files for PIXY ------
@@ -15,17 +55,15 @@ cd /scratch/project_2009316/EuSamples/06.VCF/pixy
 # Basically, we need a file with all species, wiht each sample being on one line.
 # Luckily, we already have them under, e.g.
 /scratch/project_2009316/EuSamples/06.VCF/filt/samples_ALL.txt
+#whcih incldues all species, also exsecta, sanguinea, admi2
+#we also have
+/scratch/project_2009316/EuSamples/06.VCF/filt/samples_ALL_ScandCentral.txt
+#which include the same samples, but split into aqui_Central and aqui_Scand
 #see https://pixy.readthedocs.io/en/latest/companions.html#populations-file
 
 ###
 ### 2. Compute PIXY ------
 ###
-
-###ONCE MORE 21.1.2024, with updated groupsfile to be similar w "simple" Fbranch & updated highcov vcf file###
-###REMEMBER THAT W RUFA/POL COMPARISONS WE HAVE INTROGRESSION DATA FOR ONLY A SUBSET OF THE SAMPLES GROUPED HERE###
-
-#/scratch/project_2009316/EuSamples/06.VCF/pixy/groupfiles/group_pixy_100kb_5inds_highcovsamples.tab
-#/scratch/project_2009316/EuSamples/06.VCF/gvcf/highcovsamples_filtered_noindels_rmdup.vcf.gz
 
 vim 20.4_Calc_dxy_pi_fst_AllVariantVCF.sh
 ---------------------------------------------------------------------
@@ -42,27 +80,43 @@ vim 20.4_Calc_dxy_pi_fst_AllVariantVCF.sh
 
 set -euo pipefail
 module load bio-apps/v202603
-
-export PATH="/projappl/project_2009316/EuSamples/06.VCF/pixyenv/bin:$PATH"
+module load samtools/1.21
+export PATH="/projappl/project_2009316/pixyEnv/bin:$PATH"
 
 cd /scratch/project_2009316/EuSamples/06.VCF/pixy/
 
+BASEDIR=/scratch/project_2009316/EuSamples/06.VCF/pixy
+OUTDIR=$BASEDIR/pi_dxy_fst
 VCF=/scratch/project_2009316/EuSamples/06.VCF/gvcf/highCovSamples_filtered_noindels_rmdup.vcf.gz
-POPS=/scratch/project_2009316/EuSamples/06.VCF/filt/samples_ALL.txt
+POPS_ALL=/scratch/project_2009316/EuSamples/06.VCF/filt/samples_ALL.txt
+POPS_SCAND_CENTRAL=/scratch/project_2009316/EuSamples/06.VCF/filt/samples_ALL_ScandCentral.txt
+
+cd "$BASEDIR"
 
 [[ -s "$VCF" ]] || { echo "Missing VCF: $VCF" >&2; exit 1; }
 [[ -s "${VCF}.tbi" || -s "${VCF}.csi" ]] || { echo "VCF index not found" >&2; exit 1; }
-[[ -s "$POPS" ]] || { echo "Missing populations file: $POPS" >&2; exit 1; }
+[[ -s "$POPS_ALL" ]] || { echo "Missing populations file: $POPS_ALL" >&2; exit 1; }
+[[ -s "$POPS_SCAND_CENTRAL" ]] || { echo "Missing populations file: $POPS_SCAND_CENTRAL" >&2; exit 1; }
 
+echo "Running Pixy with aqui combined ..."
 pixy --stats pi dxy fst \
     --vcf "$VCF" \
-    --populations "$POPS" \
+    --populations "$POPS_ALL" \
     --window_size 100000 \
-    --output_prefix pixy_100kb_highCov \
+    --output_folder "$OUTDIR/combined_aqui"  \
+    --output_prefix "pixy_100kb_highCov_allSamples"
+    --n_cores "$SLURM_CPUS_PER_TASK"
+
+echo "Running Pixy with aqui split into Scand and Central ..."
+pixy --stats pi dxy fst \
+    --vcf "$VCF" \
+    --populations "$POPS_SCAND_CENTRAL" \
+    --window_size 100000 \
+    --output_folder "$OUTDIR/aqui_subpopulations"  \
+    --output_prefix "pixy_100kb_highCov_ScandCentral"
     --n_cores "$SLURM_CPUS_PER_TASK"
 
 #END.
-
 
 #get the results for plotting
 scp krapfpat@puhti.csc.fi:'/scratch/project_2009316/EuSamples/06.VCF/pixy/pixy_50kb_highcov*.txt' ./
@@ -70,6 +124,12 @@ scp krapfpat@puhti.csc.fi:'/scratch/project_2009316/EuSamples/06.VCF/pixy/pixy_5
 
 
 ------------------------------------------------------------------------------------------------------------------------------------------
+###ONCE MORE 21.1.2024, with updated groupsfile to be similar w "simple" Fbranch & updated highcov vcf file###
+###REMEMBER THAT W RUFA/POL COMPARISONS WE HAVE INTROGRESSION DATA FOR ONLY A SUBSET OF THE SAMPLES GROUPED HERE###
+
+#/scratch/project_2009316/EuSamples/06.VCF/pixy/groupfiles/group_pixy_100kb_5inds_highcovsamples.tab
+#/scratch/project_2009316/EuSamples/06.VCF/gvcf/highcovsamples_filtered_noindels_rmdup.vcf.gz
+
 #### Additional run on 11.3.2025:
 ### A) use the same 250SNP windows as for fd (60% overlap), to have comparable estimates for introgression and PIXY
 ###values in the Scaffold06 high introgression region:
