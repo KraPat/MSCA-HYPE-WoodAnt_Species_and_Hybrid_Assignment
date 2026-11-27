@@ -1,0 +1,189 @@
+#In the previous script, we flagged values more than three scaled median absolute deviations (MADs) above that group’s median.
+# These flag candidates are now excluded. For GO analyses, both the full dataset and flagged dataset should be used and compared!
+
+#This script removes all 32 group–sample entries in the outlier_results table,
+# then recalculates AN, AC, AF, NS, and F_MISSING, reapplies the ≤10% site filter, and generates new final .imiss reports.
+# It starts from the pre-site-filter VCFs in excluded60_recalcAN,
+# so sites that might pass after sample removal can be retained.
+# It reprocesses polyXrufa unchanged because it has no flagged samples. Your existing VCFs are not overwritten.
+# The outputs will be under species_masked_QC/outlier_removed/ in excluded60_recalcAN, siteMiss10, and final_missingness subfolders.
+# The script checks that every listed sample ID exists in its group’s input VCF and stops if any do not.
+
+vim 6_remove_flagged_outliers.sh
+------
+#!/usr/bin/env bash
+#SBATCH --job-name=noMADoutliers
+#SBATCH --account=project_2009316
+#SBATCH --partition=small
+#SBATCH --array=0-8%4
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=24G
+#SBATCH --time=12:00:00
+#SBATCH --output=/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/slurm_logs/%x_%A_%a.out
+#SBATCH --error=/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/slurm_logs/%x_%A_%a.err
+
+# For each group, start from the pre-site-filter VCF after the original >60%
+# sample-missingness exclusion. Remove the supplied MAD-flagged samples,
+# recalculate AN/AC/AF/NS, recalculate F_MISSING, retain sites with <=10%
+# missingness, and generate a final VCFtools per-sample missingness report.
+# polyXrufa has no flagged samples, so it is reprocessed unchanged to provide
+# a complete set of nine output groups for the sensitivity analysis.
+
+set -euo pipefail
+module load bio-apps
+module load bcftools
+module load vcftools
+
+BASE="/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC"
+INPUT_ROOT="${BASE}/excluded60_recalcAN"
+OUTPUT_ROOT="${BASE}/outlier_removed"
+
+VCF_GROUPS=(Admi1 aqui aquiCentral aquiScand lugu para polyXrufa prat rufa)
+TASK_ID="${SLURM_ARRAY_TASK_ID:?Submit as a SLURM array job}"
+if (( TASK_ID < 0 || TASK_ID >= ${#VCF_GROUPS[@]} )); then
+  echo "ERROR: SLURM_ARRAY_TASK_ID=${TASK_ID} is outside 0-$(( ${#VCF_GROUPS[@]} - 1 ))." >&2
+  exit 1
+fi
+GROUP="${VCF_GROUPS[$TASK_ID]}"
+
+INPUT_VCF="${INPUT_ROOT}/${GROUP}/${GROUP}.DP8.GQ20.excl60.recalcAN.vcf.gz"
+OUT_EXCL_DIR="${OUTPUT_ROOT}/excluded60_recalcAN/${GROUP}"
+OUT_SITE_DIR="${OUTPUT_ROOT}/siteMiss10/${GROUP}"
+OUT_MISS_DIR="${OUTPUT_ROOT}/final_missingness/${GROUP}"
+NOFLAG_VCF="${OUT_EXCL_DIR}/${GROUP}.DP8.GQ20.excl60.noMADoutliers.recalcAN.vcf.gz"
+FINAL_VCF="${OUT_SITE_DIR}/${GROUP}.DP8.GQ20.excl60.noMADoutliers.siteMiss10.recalcAN.vcf.gz"
+MISS_PREFIX="${OUT_MISS_DIR}/${GROUP}.DP8.GQ20.excl60.noMADoutliers.siteMiss10"
+IMISS="${MISS_PREFIX}.imiss"
+EXCLUDE_FILE="${OUT_EXCL_DIR}/${GROUP}.MAD_flagged_samples.removed.txt"
+
+mkdir -p "$OUT_EXCL_DIR" "$OUT_SITE_DIR" "$OUT_MISS_DIR"
+
+for tool in bcftools vcftools awk; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "ERROR: Required tool '$tool' is not on PATH; load/activate the correct environment." >&2
+    exit 1
+  fi
+done
+if [[ ! -r "$INPUT_VCF" ]]; then
+  echo "ERROR: Input VCF not found/readable: $INPUT_VCF" >&2
+  exit 1
+fi
+for output in "$NOFLAG_VCF" "$FINAL_VCF" "$IMISS"; do
+  if [[ -e "$output" ]]; then
+    echo "ERROR: Output already exists; move/remove it before rerunning: $output" >&2
+    exit 1
+  fi
+done
+
+# Exact group-specific samples from the supplied outlier_results table.
+# IDs are matched against each group's input VCF before any samples are removed.
+EXCLUSION_MAP=$(cat <<'EOF'
+Admi1 14_Adm1_FI_nodupl_wRG_clip2
+Admi1 36_Adm1_FI_nodupl_wRG_clip2
+Admi1 53_Adm1_FI_nodupl_wRG_clip2
+Admi1 55_Adm1_FI_nodupl_wRG_clip2
+aqui 13_Faqui_FI_nodupl_wRG_clip2
+aqui 66_Faqui_FI_nodupl_wRG_clip2
+aqui 93_Faqui_FI_nodupl_wRG_clip2
+aquiCentral CBAQ3_Faqui_CH_nodupl_wRG_clip2
+aquiScand 66_Faqui_FI_nodupl_wRG_clip2
+aquiScand 93_Faqui_FI_nodupl_wRG_clip2
+aquiScand H_428A_spp_SE_nodupl_wRG_clip2
+aquiScand H_454A_spp_SE_nodupl_wRG_clip2
+aquiScand H_465A_spp_SE_nodupl_wRG_clip2
+lugu 1_Flug_FI_nodupl_wRG_clip2
+lugu 88_Flug_FI_nodupl_wRG_clip2
+lugu A_202a_Flug_FI_nodupl_wRG_clip2
+lugu A_244a_Flug_FI_nodupl_wRG_clip2
+para H_456A_spp_SE_nodupl_wRG_clip2
+para RN415_spp_DE_nodupl_wRG_clip2
+para RN416_spp_DE_nodupl_wRG_clip2
+prat 2_Fprat_FI_nodupl_wRG_clip2
+prat Fprat_SRR17066791_nodupl_wRG_clip2
+prat H_303A_spp_SE_nodupl_wRG_clip2
+prat H_627A_spp_IT_nodupl_wRG_clip2
+rufa 12_Frufa_FI_nodupl_wRG_clip2
+rufa 26_Frufa_FI_nodupl_wRG_clip2
+rufa 72_Frufa_FI_nodupl_wRG_clip2
+rufa H_533A_spp_DE_nodupl_wRG_clip2
+rufa RN419_Frufa_DE_nodupl_wRG_clip2
+rufa RN422_spp_DE_nodupl_wRG_clip2
+rufa RN424_Frufa_DE_nodupl_wRG_clip2
+rufa RN426_spp_DE_nodupl_wRG_clip2
+EOF
+)
+printf '%s\n' "$EXCLUSION_MAP" | awk -v group="$GROUP" '$1 == group {print $2}' | sort -u > "$EXCLUDE_FILE"
+
+N_BEFORE="$(bcftools query -l "$INPUT_VCF" | wc -l | tr -d ' ')"
+N_EXCLUDE="$(wc -l < "$EXCLUDE_FILE" | tr -d ' ')"
+SAMPLE_LIST="${OUT_EXCL_DIR}/${GROUP}.input_samples.tmp.txt"
+bcftools query -l "$INPUT_VCF" > "$SAMPLE_LIST"
+
+while IFS= read -r SAMPLE_ID; do
+  if ! grep -Fqx -- "$SAMPLE_ID" "$SAMPLE_LIST"; then
+    echo "ERROR: Flagged sample is absent from ${GROUP} input VCF: ${SAMPLE_ID}" >&2
+    rm -f "$SAMPLE_LIST"
+    exit 1
+  fi
+done < "$EXCLUDE_FILE"
+rm -f "$SAMPLE_LIST"
+
+if (( N_EXCLUDE >= N_BEFORE )); then
+  echo "ERROR: ${GROUP}: flagged count (${N_EXCLUDE}) is not smaller than input sample count (${N_BEFORE})." >&2
+  exit 1
+fi
+N_EXPECTED=$((N_BEFORE - N_EXCLUDE))
+echo "Group: ${GROUP}; samples before: ${N_BEFORE}; flagged for removal: ${N_EXCLUDE}; expected retained: ${N_EXPECTED}"
+if (( N_EXCLUDE > 0 )); then
+  echo "Removing these samples:"
+  cat "$EXCLUDE_FILE"
+else
+  echo "No samples flagged for ${GROUP}; all samples are retained."
+fi
+
+# Remove flagged samples and recalculate allele count/frequency tags on the
+# remaining genotypes. For polyXrufa, the empty exclusion list retains all samples.
+if (( N_EXCLUDE > 0 )); then
+  bcftools view --threads "${SLURM_CPUS_PER_TASK:-4}" -S "^${EXCLUDE_FILE}" -Ou "$INPUT_VCF" | bcftools +fill-tags - -Ou -- -t AN,AC,AF,NS | bcftools view --threads "${SLURM_CPUS_PER_TASK:-4}" -Oz -o "$NOFLAG_VCF"
+else
+  bcftools +fill-tags "$INPUT_VCF" -Ou -- -t AN,AC,AF,NS | bcftools view --threads "${SLURM_CPUS_PER_TASK:-4}" -Oz -o "$NOFLAG_VCF"
+fi
+bcftools index -f "$NOFLAG_VCF"
+
+# Recalculate per-site missingness on the reduced sample set and apply the
+# same <=10% site threshold. Existing AN/AC/AF/NS tags are retained.
+bcftools +fill-tags "$NOFLAG_VCF" -Ou -- -t F_MISSING | bcftools view --threads "${SLURM_CPUS_PER_TASK:-4}" -i 'INFO/F_MISSING<=0.10' -Oz -o "$FINAL_VCF"
+bcftools index -f "$FINAL_VCF"
+
+N_AFTER="$(bcftools query -l "$FINAL_VCF" | wc -l | tr -d ' ')"
+if [[ "$N_AFTER" -ne "$N_EXPECTED" ]]; then
+  echo "ERROR: ${GROUP}: expected ${N_EXPECTED} retained samples, found ${N_AFTER}." >&2
+  exit 1
+fi
+if ! bcftools query -f '%INFO/F_MISSING\n' "$FINAL_VCF" | awk '$1 > 0.100001 { bad=1 } END { exit bad }'; then
+  echo "ERROR: ${GROUP}: at least one retained site exceeds 10% missingness." >&2
+  exit 1
+fi
+
+# Final per-sample missingness report for the outlier-removed dataset.
+vcftools --gzvcf "$FINAL_VCF" --missing-indv --out "$MISS_PREFIX"
+if [[ ! -s "$IMISS" ]]; then
+  echo "ERROR: VCFtools did not create a non-empty report: $IMISS" >&2
+  exit 1
+fi
+N_REPORT=$(( $(wc -l < "$IMISS") - 1 ))
+if [[ "$N_REPORT" -ne "$N_AFTER" ]]; then
+  echo "ERROR: ${GROUP}: expected ${N_AFTER} sample rows in ${IMISS}, found ${N_REPORT}." >&2
+  exit 1
+fi
+
+N_SITES_PRE="$(bcftools index -n "$NOFLAG_VCF")"
+N_SITES_FINAL="$(bcftools index -n "$FINAL_VCF")"
+echo "Recalculated-tag VCF: ${NOFLAG_VCF} (${N_SITES_PRE} records)"
+echo "Final <=10%-missing VCF: ${FINAL_VCF} (${N_SITES_FINAL} records)"
+echo "Final missingness report: ${IMISS} (${N_REPORT} samples)"
+echo "Completed ${GROUP}"
+
+#END
+
+
