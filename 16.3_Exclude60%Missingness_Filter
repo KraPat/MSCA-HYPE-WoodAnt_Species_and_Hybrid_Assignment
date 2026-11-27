@@ -455,39 +455,6 @@ echo "Completed group ${GROUP}"
 # than the earlier pre-site-filter values. Use them to describe completeness of the final files, not to redo the sample-exclusion decision.
 # First, we download the files. Then, we combine and summarize all reports in R like this:
 
-#Download files
-cd /root/EuSamples/06.VCF/GenomicOffset
-rsync -av --prune-empty-dirs --include='*/' --include='*.imiss' --exclude='*' krapfpat@roihu-cpu.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/ ./imiss_reports/
-
-
-# Now, move to R and in R
-library(dplyr)
-
-#CHANGE BELOW
-report_dir <- "/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/final_missingness"
-files <- list.files(report_dir, pattern = "\\.imiss$", recursive = TRUE, full.names = TRUE)
-
-imiss <- bind_rows(lapply(files, function(f) {
-  x <- read.delim(f, check.names = FALSE)
-  x$group <- basename(dirname(f))
-  x
-}))
-
-imiss %>%
-  group_by(group) %>%
-  summarise(
-    n_samples = n(),
-    median_F_MISS = median(F_MISS, na.rm = TRUE),
-    maximum_F_MISS = max(F_MISS, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-imiss %>%
-  arrange(desc(F_MISS)) %>%
-  select(group, INDV, N_DATA, N_MISS, F_MISS)
-
-#Remember that aqui overlaps with aquiCentral and aquiScand, so those repeated samples appear in multiple group reports by design.
-
 
 
 
