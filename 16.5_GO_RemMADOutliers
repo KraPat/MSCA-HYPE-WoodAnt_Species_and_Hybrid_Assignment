@@ -186,4 +186,16 @@ echo "Completed ${GROUP}"
 
 #END
 
+#The script creates a final, site-filtered VCF for each group with the flagged samples removed. Those are the no-outlier genotype
+#VCFs to use as inputs for your genomic-offset (GO) preparation, e.g.:
+species_masked_QC/outlier_removed/siteMiss10/<group>/<group>.DP8.GQ20.excl60.noMADoutliers.siteMiss10.recalcAN.vcf.gz
+
+#It also creates corresponding final .imiss reports. For the with-outlier comparison, use the original siteMiss10 VCFs.
+# These are filtered genotype inputs, but your GO method may still require conversion to a genotype matrix or another format,
+# plus matching sample/location and environmental data. Also, aqui overlaps with aquiCentral and aquiScand.
+
+
+
+
+
 
