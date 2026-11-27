@@ -10,7 +10,7 @@ Here, we split the VCF with the called SNPs into VCF for each different species.
 # Observed heterozygosity among complete diploid SNP genotypes.
 
 
-16_SpeciesVCF_QC.sh
+vim 16.0.1_SpeciesVCF_QC.sh
 #######################################################################################
 #!/bin/bash
 #SBATCH --job-name=speciesVCF_QC
