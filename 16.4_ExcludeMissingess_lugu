@@ -1,0 +1,310 @@
+#We forgot to include lugubris in the previous file
+# We thus created a new script to analyse lugubris
+# It follows the same logic and pipeline as 16.3
+
+vim 
+-------------------------------------------------
+!/usr/bin/env bash
+#SBATCH --job-name=lugu_qc
+#SBATCH --account=project_2009316
+#SBATCH --partition=small
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=24G
+#SBATCH --time=12:00:00
+#SBATCH --output=/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/slurm_logs/%x_%j.out
+#SBATCH --error=/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/slurm_logs/%x_%j.err
+
+# Lugu-only pipeline:
+# 1) Exclude samples with missing_GT_fraction_after > 0.60 in the supplied TSV.
+# 2) Recalculate AN, AC, AF, and NS from retained GT calls.
+# 3) Recalculate F_MISSING and retain sites with <=10% missing genotypes.
+# 4) Run VCFtools --missing-indv on the final site-filtered VCF.
+# If no sample exceeds 60%, all Lugu samples are retained.
+# Add cluster-specific account/partition and software module/conda setup below.
+
+set -euo pipefail
+module load bio-apps/v202603
+module load bcftools
+module load vcftools
+
+BASE="/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC"
+INPUT_VCF="${BASE}/lugu/lugu.DP8.GQ20.masked.vcf.gz"
+MISSINGNESS_TSV="${BASE}/lugu/lugu.DP8.GQ20.missingness_before_after.tsv"
+
+EXCL_DIR="${BASE}/excluded60_recalcAN/lugu"
+SITE_DIR="${BASE}/siteMiss10/lugu"
+MISS_DIR="${BASE}/final_missingness/lugu"
+EXCL_VCF="${EXCL_DIR}/lugu.DP8.GQ20.excl60.recalcAN.vcf.gz"
+SITE_VCF="${SITE_DIR}/lugu.DP8.GQ20.excl60.siteMiss10.recalcAN.vcf.gz"
+MISS_PREFIX="${MISS_DIR}/lugu.DP8.GQ20.excl60.siteMiss10"
+IMISS="${MISS_PREFIX}.imiss"
+EXCLUDE_FILE="${EXCL_DIR}/lugu.excluded_gt_missing_gt60pct.samples.txt"
+
+mkdir -p "$EXCL_DIR" "$SITE_DIR" "$MISS_DIR"
+
+for tool in bcftools vcftools awk; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "ERROR: Required tool '$tool' is not on PATH; load/activate the correct environment." >&2
+    exit 1
+  fi
+done
+if [[ ! -r "$INPUT_VCF" ]]; then
+  echo "ERROR: Input VCF not found/readable: $INPUT_VCF" >&2
+  exit 1
+fi
+if [[ ! -r "$MISSINGNESS_TSV" ]]; then
+  echo "ERROR: Missingness TSV not found/readable: $MISSINGNESS_TSV" >&2
+  exit 1
+fi
+for output in "$EXCL_VCF" "$SITE_VCF" "$IMISS"; do
+  if [[ -e "$output" ]]; then
+    echo "ERROR: Output already exists; move/remove it before rerunning: $output" >&2
+    exit 1
+  fi
+done
+
+JOB_TMP="${SLURM_TMPDIR:-$EXCL_DIR}"
+mkdir -p "$JOB_TMP"
+SUBSET_TMP="${JOB_TMP}/lugu.subset.${SLURM_JOB_ID:-manual}.tmp.vcf.gz"
+cleanup() {
+  rm -f "$SUBSET_TMP" "$SUBSET_TMP.csi" "$SUBSET_TMP.tbi"
+}
+trap cleanup EXIT
+
+# Extract sample IDs whose post-mask missingness is strictly greater than 60%.
+# Accept either proportions (0.60) or percentages (60) in the TSV.
+awk -F '\t' '
+  NR == 1 {
+    for (i = 1; i <= NF; i++) {
+      gsub(/\r$/, "", $i)
+      if ($i == "sample_id") sample_col = i
+      if ($i == "missing_GT_fraction_after") missing_col = i
+    }
+    if (!sample_col || !missing_col) {
+      print "ERROR: TSV must contain sample_id and missing_GT_fraction_after columns" > "/dev/stderr"
+      exit 2
+    }
+    next
+  }
+  {
+    sample = $sample_col
+    value = $missing_col
+    gsub(/\r$/, "", sample)
+    gsub(/%/, "", value)
+    if (sample == "" || value == "" || value == "NA") next
+    if (value + 0 > 1) value = value / 100
+    if (value + 0 > 0.60) print sample
+  }
+' "$MISSINGNESS_TSV" | sort -u > "$EXCLUDE_FILE"
+
+N_BEFORE="$(bcftools query -l "$INPUT_VCF" | wc -l | tr -d ' ')"
+N_EXCLUDE="$(wc -l < "$EXCLUDE_FILE" | tr -d ' ')"
+
+# Validate every requested exclusion ID against the VCF sample names.
+while IFS= read -r SAMPLE_ID; do
+  if ! bcftools query -l "$INPUT_VCF" | grep -Fqx -- "$SAMPLE_ID"; then
+    echo "ERROR: TSV exclusion sample is absent from the Lugu VCF: ${SAMPLE_ID}" >&2
+    exit 1
+  fi
+done < "$EXCLUDE_FILE"
+
+if (( N_EXCLUDE >= N_BEFORE )); then
+  echo "ERROR: Exclusion count (${N_EXCLUDE}) is not smaller than VCF sample count (${N_BEFORE})." >&2
+  exit 1
+fi
+N_EXPECTED=$((N_BEFORE - N_EXCLUDE))
+echo "Lugu samples before exclusion: ${N_BEFORE}; >60% missing: ${N_EXCLUDE}; expected retained: ${N_EXPECTED}"
+if (( N_EXCLUDE == 0 )); then
+  echo "No samples exceed 60%; retaining all Lugu samples."
+else
+  echo "Excluded sample IDs:"
+  cat "$EXCLUDE_FILE"
+fi
+
+# Exclude listed samples. If the exclusion list is empty, retain all samples.
+if (( N_EXCLUDE > 0 )); then
+  bcftools view --threads "${SLURM_CPUS_PER_TASK:-4}" -S "^${EXCLUDE_FILE}" -Oz -o "$SUBSET_TMP" "$INPUT_VCF"
+else
+  bcftools view --threads "${SLURM_CPUS_PER_TASK:-4}" -Oz -o "$SUBSET_TMP" "$INPUT_VCF"
+fi
+
+# Recalculate allele-count/frequency tags from the retained GT calls.
+bcftools +fill-tags "$SUBSET_TMP" -Oz -o "$EXCL_VCF" -- -t AN,AC,AF,NS
+bcftools index -f "$EXCL_VCF"
+
+# Calculate per-site genotype missingness in the retained Lugu samples and filter at 10%.
+bcftools +fill-tags "$EXCL_VCF" -Ou -- -t F_MISSING | bcftools view --threads "${SLURM_CPUS_PER_TASK:-4}" -i 'INFO/F_MISSING<=0.10' -Oz -o "$SITE_VCF"
+bcftools index -f "$SITE_VCF"
+
+N_AFTER="$(bcftools query -l "$SITE_VCF" | wc -l | tr -d ' ')"
+if [[ "$N_AFTER" -ne "$N_EXPECTED" ]]; then
+  echo "ERROR: Expected ${N_EXPECTED} samples after exclusion, found ${N_AFTER}." >&2
+  exit 1
+fi
+if ! bcftools query -f '%INFO/F_MISSING\n' "$SITE_VCF" | awk '$1 > 0.100001 { bad=1 } END { exit bad }'; then
+  echo "ERROR: At least one retained site exceeds 10% missingness." >&2
+  exit 1
+fi
+
+# Final per-sample missingness report on the site-filtered VCF.
+vcftools --gzvcf "$SITE_VCF" --missing-indv --out "$MISS_PREFIX"
+if [[ ! -s "$IMISS" ]]; then
+  echo "ERROR: VCFtools did not create a non-empty report: $IMISS" >&2
+  exit 1
+fi
+N_REPORT=$(( $(wc -l < "$IMISS") - 1 ))
+if [[ "$N_REPORT" -ne "$N_AFTER" ]]; then
+  echo "ERROR: Expected ${N_AFTER} sample rows in ${IMISS}, found ${N_REPORT}." >&2
+  exit 1
+fi
+
+N_SITES_EXCL="$(bcftools index -n "$EXCL_VCF")"
+N_SITES_FINAL="$(bcftools index -n "$SITE_VCF")"
+echo "Allele-count VCF: ${EXCL_VCF} (${N_SITES_EXCL} records)"
+echo "Final site-filtered VCF: ${SITE_VCF} (${N_SITES_FINAL} records)"
+echo "Final sample missingness report: ${IMISS} (${N_REPORT} samples)"
+echo "Completed Lugu pipeline."
+
+#END
+------------------------------------------------------------------
+
+After this, we download the files
+cd /root/EuSamples/06.VCF/GenomicOffset
+rsync -av --prune-empty-dirs --include='*/' --include='*.imiss' --exclude='*' krapfpat@roihu-cpu.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/ ./imiss_reports/
+
+# Now, move to R and in R
+------
+#+++++++++++++++++++++++++++++++++++++++++++
+#Check missingness... ####
+#+++++++++++++++++++++++++++++++++++++++++++
+library(dplyr)
+setwd("//wsl.localhost/Ubuntu/root/root/EuSamples/06.VCF/GenomicOffset/imiss_reports/final_missingness")
+list.files()
+
+# Read only final reports whose filenames end in siteMiss10.imiss
+files <- list.files(
+  pattern = "siteMiss10\\.imiss$",
+  recursive = TRUE,
+  full.names = TRUE
+)
+
+if (length(files) == 0) {
+  stop("No final siteMiss10.imiss files found. Check report_dir and filenames.")
+}
+
+#imiss: the combined per-sample rows from the final .imiss reports
+imiss <- bind_rows(lapply(files, function(f) {
+  x <- read.delim(f, check.names = FALSE)
+  x$report_file <- basename(f)
+  x$group <- sub("\\..*$", "", basename(f))
+  x
+}))
+
+# group_summary: one row per group. n_samples counts distinct sample IDs; median_F_MISS and maximum_F_MISS summarize their missingness.
+# N_DATA is the number of sites assessed.
+# N_MISS is the number of missing genotypes.
+# F_MISS is the fraction missing; for example, 0.413 means 41.3%.
+group_summary <- imiss %>%
+  group_by(group) %>%
+  summarise(
+    n_samples = n_distinct(INDV),
+    median_F_MISS = median(F_MISS, na.rm = TRUE),
+    maximum_F_MISS = max(F_MISS, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Up to 5 samples with the highest missingness in each group
+results <- imiss %>%
+  group_by(group) %>%
+  slice_max(order_by = F_MISS, n = 5, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(group, INDV, N_DATA, N_MISS, F_MISS)
+
+write.csv(group_summary,
+          file.path("imiss_group_summary.csv"),
+          row.names = FALSE)
+group_summary
+
+write.csv(results,
+          file.path("imiss_top5_per_group.csv"),
+          row.names = FALSE)
+results
+print(n=45, results)
+# Admi1	Four samples have 31–41% missingness, far above the 3.7% median. Strong QC/sensitivity-analysis candidates.
+#	aqui Highest values are 16–24%: elevated relative to the 4.3% median, but less extreme than the largest outliers elsewhere.
+# aquiCentral	Maximum is 15%; no similarly extreme outlier.
+# aquiScand	Three samples have about 30–41% missingness; clear outliers.
+# lugu	Maximum is 10.4%; comparatively little concern.
+# para	RN415... is at 31.8%, well above the 1.2% median.
+# polyXrufa	All values are zero. This is expected with only seven samples: one missing genotype at a site would be 14.3% missing,
+#so the 10% site filter removes any site with even one missing call.
+# prat	Fprat_SRR17066791... is at 36.6%, well above the 2.0% median.
+# rufa	Three samples are at 26–38%, far above the 2.8% median.
+
+#For the original 60% sample-exclusion rule, check these samples’ missing_GT_fraction_after values in the pre-site-filter TSV.
+# The final .imiss values are measured on a different set of sites, so they don’t tell you whether a sample met that original cutoff.
+
+#For genomic offset, it may be better to flag the most extreme outliers—especially the high-missingness samples in Admi1, aquiScand, para,
+# prat, and rufa—and check their sequencing/masking QC. Then compare results with and without flagged samples as a sensitivity analysis.
+# If we decide to remove any, rerun the downstream sample-removal and allele-count/site-filter steps for those groups so the VCF tags
+# and retained sites match the new sample set.
+#-- SEE BELOW
+
+## Now, we use within-group robust outlier rule so a sample is judged against its own group, not against all species combined.
+#One reasonable screening rule is to flag values more than three scaled median absolute deviations (MADs) above that group’s median.
+# This flags candidates for review; it does not automatically mean they should be excluded.
+
+flagged_imiss <- imiss %>%
+  group_by(group) %>%
+  mutate(
+    group_median = median(F_MISS, na.rm = TRUE),
+    group_MAD = mad(
+      F_MISS,
+      center = group_median,
+      constant = 1.4826,
+      na.rm = TRUE
+    ),
+    MAD_cutoff = group_median + 3 * group_MAD,
+    extreme_MAD = case_when(
+      is.na(group_MAD) | group_MAD == 0 ~ FALSE,
+      TRUE ~ F_MISS > MAD_cutoff
+    )
+  ) %>%
+  ungroup()
+
+# Group summaries, including the number flagged
+outlier_summary <- flagged_imiss %>%
+  group_by(group) %>%
+  summarise(
+    n_samples = n_distinct(INDV),
+    median_F_MISS = median(F_MISS, na.rm = TRUE),
+    maximum_F_MISS = max(F_MISS, na.rm = TRUE),
+    MAD_cutoff = first(MAD_cutoff),
+    n_flagged = sum(extreme_MAD),
+    .groups = "drop"
+  )
+
+# The flagged individuals and their missingness values
+outlier_results <- flagged_imiss %>%
+  filter(extreme_MAD) %>%
+  select(group, INDV, F_MISS, N_DATA, N_MISS,
+         group_median, group_MAD, MAD_cutoff)
+
+outlier_summary
+outlier_results
+
+write.csv(outlier_summary, "imiss_outlier_summary.csv", row.names = FALSE)
+write.csv(outlier_results, "imiss_flagged_samples.csv", row.names = FALSE)
+
+#If a group’s MAD is zero, this rule won’t flag samples in that group; inspect its F_MISS values directly. That is relevant to polyXrufa, where all values are zero—expected with seven samples and a 10% per-site missingness filter, since one missing call would exceed 10%.
+
+# How to compare the genomic-offset results
+# Treat the MAD flags as a sensitivity-analysis set, not as a new automatic exclusion rule:
+# Run the offset analysis with the samples retained under your original, pre-site-filter 60% rule.
+# Repeat it without the flagged samples, rebuilding the genotype inputs after removing them.
+# Keep the method, environmental predictors, locations, and model settings the same.
+# Compare predictions for the same locations—for example, their correlation, rank ordering, and the size and geographic pattern of differences.
+
+#Also check flagged samples against the original missing_GT_fraction_after values and sequencing/masking QC. Your site-filtered F_MISS values describe missingness among the final retained sites, so they aren’t interchangeable with the earlier values used for the 60% exclusion rule.
+
+
