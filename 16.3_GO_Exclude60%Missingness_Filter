@@ -5,7 +5,7 @@
 # Outputs will be under species_masked_QC/excluded60_recalcAN/<group>/.
 # INFO: HWE is not recalculated; if HWE fields is used for downstream analyses, it needs to be recalculate for the retained samples.
 
-vim 3_Exclude60PercMissing_RecalcAllCounts.sh
+vim 16.3.1_Exclude60PercMissing_RecalcAllCounts.sh
 ---------------------
 #!/usr/bin/env bash
 #SBATCH --job-name=exclude60_retag
@@ -234,7 +234,7 @@ for f in /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species
 mkdir -p /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/slurm_logs
 
 --
-vim 4_Recalc_10PercSiteMissing.sh
+vim 16.3.2_Recalc_10PercSiteMissing.sh
 ------
 #!/usr/bin/env bash
 #SBATCH --job-name=site10percMissing
@@ -355,7 +355,7 @@ for f in /scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species
 # It writes one .imiss report per group under species_masked_QC/final_missingness/
 # This is useful for reporting, but don’t use the lower missingness after site filtering to revisit sample exclusions: removing high-missingness sites will naturally make the remaining genotypes look more complete.
 
-vim 5_final_missingness_report.sh
+vim 16.3.3_final_missingness_report.sh
 -------------
 #!/usr/bin/env bash
 #SBATCH --job-name=final_imiss
