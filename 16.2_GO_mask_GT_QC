@@ -1,4 +1,6 @@
 #Next, we use a script to mask GT and QC. Specifically, it keeps genotypes meeting both DP ≥ 8 and GQ ≥ 20 and sets genotypes tomissing with DP or GQ unabailable. After masking, it recalculates sample missingness before filtering sites, using the same SNP records as the original QC. This makes the before/after comparison meaningful.
+
+vim 16.2_mask_genotypes_qc.sh
 ###############################################################################
 #!/bin/bash
 #SBATCH --job-name=maskGT_QC
