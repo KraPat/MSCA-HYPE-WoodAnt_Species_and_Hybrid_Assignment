@@ -457,9 +457,10 @@ echo "Completed group ${GROUP}"
 
 #Download files
 cd /root/EuSamples/06.VCF/GenomicOffset
-scp -r krapfpat@roihu-cpu.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/final_missingness/Admi1/*imiss ./
+rsync -av --prune-empty-dirs --include='*/' --include='*.imiss' --exclude='*' krapfpat@roihu-cpu.csc.fi:/scratch/project_2009316/EuSamples/06.VCF/filt/SpeciesSubsetVCF/species_masked_QC/ ./imiss_reports/
 
-# in R
+
+# Now, move to R and in R
 library(dplyr)
 
 #CHANGE BELOW
@@ -486,9 +487,6 @@ imiss %>%
   select(group, INDV, N_DATA, N_MISS, F_MISS)
 
 #Remember that aqui overlaps with aquiCentral and aquiScand, so those repeated samples appear in multiple group reports by design.
-
-
-
 
 
 
