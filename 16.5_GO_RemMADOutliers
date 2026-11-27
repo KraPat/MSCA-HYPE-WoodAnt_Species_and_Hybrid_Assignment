@@ -9,7 +9,7 @@
 # The outputs will be under species_masked_QC/outlier_removed/ in excluded60_recalcAN, siteMiss10, and final_missingness subfolders.
 # The script checks that every listed sample ID exists in its group’s input VCF and stops if any do not.
 
-vim 6_remove_flagged_outliers.sh
+vim 6.5_remove_flagged_outliers.sh
 ------
 #!/usr/bin/env bash
 #SBATCH --job-name=noMADoutliers
