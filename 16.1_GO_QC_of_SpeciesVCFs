@@ -1,7 +1,7 @@
 ##############################################
 # After obtaining the samples, we run the followign pyhton script to summarise the quality controls done in the previous scripts
 
-# 1_flag_sample_qc.py
+vim 16.1_flag_sample_qc.py
 #######
 !/usr/bin/env python3
 """Flag samples for investigation from the species/group sample_QC.tsv reports.
@@ -252,7 +252,7 @@ if __name__ == '__main__':
 #END
 
 ###########USAGE
-#python3 flag_sample_qc.py --input "/scratch/project_2009316/EuSamples/06.VCF/species_QC/all_groups.sample_QC.tsv" --outdir "/scratch/project_2009316/EuSamples/06.VCF/species_QC/qc_flags"
+#python3 16.1_flag_sample_qc.py --input "/scratch/project_2009316/EuSamples/06.VCF/species_QC/all_groups.sample_QC.tsv" --outdir "/scratch/project_2009316/EuSamples/06.VCF/species_QC/qc_flags"
 
 #What it checks
 #Check   Default warning threshold
