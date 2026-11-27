@@ -250,10 +250,12 @@ print(n=45, results)
 # and retained sites match the new sample set.
 #-- SEE BELOW
 
+
 ## Now, we use within-group robust outlier rule so a sample is judged against its own group, not against all species combined.
 #One reasonable screening rule is to flag values more than three scaled median absolute deviations (MADs) above that group’s median.
 # This flags candidates for review; it does not automatically mean they should be excluded.
 
+#in R
 flagged_imiss <- imiss %>%
   group_by(group) %>%
   mutate(
@@ -296,15 +298,20 @@ outlier_results
 write.csv(outlier_summary, "imiss_outlier_summary.csv", row.names = FALSE)
 write.csv(outlier_results, "imiss_flagged_samples.csv", row.names = FALSE)
 
-#If a group’s MAD is zero, this rule won’t flag samples in that group; inspect its F_MISS values directly. That is relevant to polyXrufa, where all values are zero—expected with seven samples and a 10% per-site missingness filter, since one missing call would exceed 10%.
+#If a group’s MAD is zero, this rule won’t flag samples in that group; inspect its F_MISS values directly.
+#That is relevant to polyXrufa, where all values are zero—expected with seven samples and a 10% per-site missingness filter, 
+#since one missing call would exceed 10%.
 
 # How to compare the genomic-offset results
 # Treat the MAD flags as a sensitivity-analysis set, not as a new automatic exclusion rule:
 # Run the offset analysis with the samples retained under your original, pre-site-filter 60% rule.
 # Repeat it without the flagged samples, rebuilding the genotype inputs after removing them.
 # Keep the method, environmental predictors, locations, and model settings the same.
-# Compare predictions for the same locations—for example, their correlation, rank ordering, and the size and geographic pattern of differences.
+# Compare predictions for the same locations—for example, their correlation, rank ordering,
+# and the size and geographic pattern of differences.
 
-#Also check flagged samples against the original missing_GT_fraction_after values and sequencing/masking QC. Your site-filtered F_MISS values describe missingness among the final retained sites, so they aren’t interchangeable with the earlier values used for the 60% exclusion rule.
+#Also check flagged samples against the original missing_GT_fraction_after values and sequencing/masking QC. Your site-filtered F_MISS 
+# values describe missingness among the final retained sites, so they aren’t interchangeable with the earlier values used
+# for the 60% exclusion rule.
 
 
